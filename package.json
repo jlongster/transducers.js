@@ -1,6 +1,6 @@
 {
   "name": "transducers.js",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "James Long <longster@gmail.com>",
   "main": "./transducers.js",
   "devDependencies": {
