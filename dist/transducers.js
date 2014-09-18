@@ -59,11 +59,19 @@ var transducers =
 	  var names = Array.prototype.slice.call(arguments, 1);
 	  return names.reduce(function(result, name) {
 	    if(symbolExists) {
-	      return result && obj[name === 'iterator' ?
-	                           Symbol.iterator :
-	                           Symbol.for(name)];
+	      if(name === 'iterator') {
+	        // Accept ill-formed iterators that don'y conform to the
+	        // protocol by accepting just next()
+	        return result && (obj[Symbol.iterator] || obj.next);
+	      }
+	      return result && obj[Symbol.for(name)];
 	    }
 	    else {
+	      if(name === 'iterator') {
+	        // Accept ill-formed iterators that don't conform to the
+	        // protocol by accepting just next()
+	        return result && (obj['@@iterator'] || obj.next);
+	      }
 	      return result && obj['@@' + name];
 	    }
 	  }, true);
@@ -81,10 +89,28 @@ var transducers =
 	  return obj['@@' + name];
 	}
 
+	function iterator(coll) {
+	  var iter = getProtocolMethod(coll, 'iterator');
+	  if(iter) {
+	    return iter.call(coll);
+	  }
+	  else if(coll.next) {
+	    // Basic duck typing to except an ill-formed iterator that doesn't
+	    // conform to the iterator protocol (all iterators should have the
+	    // @@iterator method and return themselves, but some engines don't
+	    // have that on generators like older v8)
+	    return coll;
+	  }
+	}
+
 	// helpers
 
 	function isArray(x) {
 	  return x instanceof Array;
+	}
+
+	function isFunction(x) {
+	  typeof x === 'function';
 	}
 
 	function isObject(x) {
@@ -104,39 +130,8 @@ var transducers =
 	  return arr;
 	}
 
-	// TODO: get rid of iterate and allow reducers to stop reducing.
-	// Didn't do that yet because performance.
-	function Iterated(val) {
+	function Reduced(val) {
 	  this.val = val;
-	}
-
-	function iterate(coll, f) {
-	  if(isArray(coll)) {
-	    for(var i=0; i<coll.length; i++) {
-	      var val = f(coll[i], i);
-	      if(val instanceof Iterated) {
-	        return val.val;
-	      }
-	    }
-	    return;
-	  }
-	  else if(isObject(coll)) {
-	    return iterate(Object.keys(coll), function(k) {
-	      return f([k, coll[k]]);
-	    });
-	  }
-	  else if(fullfillsProtocols(coll, 'iterator')) {
-	    var iter = getProtocolMethod(coll, 'iterator').call(coll);
-	    var val = iter.next();
-	    while(!val.done) {
-	      if(f(val.value) instanceof Iterated) {
-	        return val.value.val;
-	      }
-	      val = iter.next();
-	    }
-	    return;
-	  }
-	  throwProtocolError('iterate', coll);
 	}
 
 	function reduce(coll, f, init) {
@@ -146,21 +141,29 @@ var transducers =
 	    var len = coll.length;
 	    while(++index < len) {
 	      result = f(result, coll[index], index);
+	      if(result instanceof Reduced) {
+	        return result.val;
+	      }
 	    }
 	    return result;
 	  }
 	  else if(isObject(coll)) {
-	    return reduce(Object.keys(coll), function(result, k) {
-	      return f(result, [k, coll[k]]);
+	    return reduce(Object.keys(coll), function(result, k, i) {
+	      return f(result, [k, coll[k]], i);
 	    }, init);
 	  }
 	  else if(fullfillsProtocols(coll, 'iterator')) {
 	    var result = init;
-	    var iter = getProtocolMethod(coll, 'iterator').call(coll);
+	    var iter = iterator(coll);
 	    var val = iter.next();
+	    var i = 0;
 	    while(!val.done) {
-	      result = f(result, val.value);
+	      result = f(result, val.value, i);
+	      if(result instanceof Reduced) {
+	        return result.val;
+	      }
 	      val = iter.next();
+	      i++;
 	    }
 	    return result;
 	  }
@@ -205,12 +208,16 @@ var transducers =
 	  throwProtocolError('make empty', coll);
 	}
 
-	function transduce(coll, xform, f, init) {
+	function sequence(xform, coll) {
+	  return transduce(xform, append, empty(coll), coll);
+	}
+
+	function transduce(xform, f, init, coll) {
 	  return reduce(coll, xform(f), init);
 	}
 
 	function into(to, xform, from) {
-	  return transduce(from, xform, append, to);
+	  return transduce(xform, append, to, from);
 	}
 
 	function compose() {
@@ -229,7 +236,13 @@ var transducers =
 	function map(f, coll) {
 	  if(coll) {
 	    if(isArray(coll)) {
-	      return coll.map(f);
+	      var result = [];
+	      var index = -1;
+	      var len = coll.length;
+	      while(++index < len) {
+	        result.push(f(coll[index], index));
+	      }
+	      return result;
 	    }
 	    else {
 	      var i = 0;
@@ -242,9 +255,6 @@ var transducers =
 	  return function(r) {
 	    var i = 0;
 	    return function(res, input) {
-	      if(input === undefined) {
-	        return r(res, input);
-	      }
 	      return r(res, f(input, i++));
 	    }
 	  }
@@ -253,13 +263,21 @@ var transducers =
 	function filter(f, coll) {
 	  if(coll) {
 	    if(isArray(coll)) {
-	      return coll.filter(f);
+	      var result = [];
+	      var index = -1;
+	      var len = coll.length;
+	      while(++index < len) {
+	        if(f(coll[index], index)) {
+	          result.push(coll[index]);
+	        }
+	      }
+	      return result;
 	    }
 	    else {
 	      var i = 0;
-	      return reduce(coll, function(result, x) {
-	        if(f(x, i++)) {
-	          return append(result, x);
+	      return reduce(coll, function(result, input) {
+	        if(f(input, i++)) {
+	          return append(result, input);
 	        }
 	        return result;
 	      }, empty(coll));
@@ -281,17 +299,6 @@ var transducers =
 	  return filter(function(x) { return !f(x); }, coll);
 	}
 
-	// function takeWhile(f, coll) {
-	//   if(coll) {
-	//     reduce(coll, function(result, x) {
-	//       if(x) {
-	//         return append(result, x);
-	//       }
-	//       return REDUCE_STOP;
-	//     }, empty(coll));
-	//   }
-	// }
-
 	function keep(f, coll) {
 	  return filter(function(x) { return x != null }, coll);
 	}
@@ -302,10 +309,10 @@ var transducers =
 	  if(coll) {
 	    return reduce(
 	      coll,
-	      function(result, x) {
-	        if(x !== last) {
-	          last = x;
-	          return append(result, x);
+	      function(result, input) {
+	        if(input !== last) {
+	          last = input;
+	          return append(result, input);
 	        }
 	        return result;
 	      },
@@ -314,33 +321,169 @@ var transducers =
 	  }
 
 	  return function(r) {
-	    return function(result, x) {
-	      if(x !== last) {
-	        last = x;
-	        r(result, x);
+	    return function(result, input) {
+	      if(input !== last) {
+	        last = input;
+	        r(result, input);
 	      }
 	      return result;
 	    };
 	  }
 	}
 
-	function take(coll, n) {
-	  if(isNumber(n)) {
-	    var result = empty(coll);
-	    return iterate(coll, function(x, i) {
-	      if(i + 1 <= n) {
-	        result = append(result, x);
+	function takeWhile(f, coll) {
+	  if(coll) {
+	    if(isArray(coll)) {
+	      var result = [];
+	      var index = -1;
+	      var len = coll.length;
+	      while(++index < len) {
+	        if(f(coll[index])) {
+	          result.push(coll[index]);
+	        }
+	        else {
+	          break;
+	        }
 	      }
-	      else {
-	        return Iterated(result);
-	      }
-	    });
-	  }
-	  else {
-	    n = coll;
+	      return result;
+	    }
+	    else {
+	      return reduce(coll, function(result, input) {
+	        if(f(input)) {
+	          return append(result, input);
+	        }
+	        return new Reduced(result);
+	      }, empty(coll));
+	    }
 	  }
 
+	  return function(r) {
+	    return function(result, input) {
+	      if(f(input)) {
+	        return r(result, input);
+	      }
+	      return new Reduced(result);
+	    };
+	  }
+	}
 
+	function take(n, coll) {
+	  if(coll) {
+	    if(isArray(coll)) {
+	      var result = [];
+	      var index = -1;
+	      var len = coll.length;
+	      while(++index < n && index < len) {
+	        result.push(coll[index]);
+	      }
+	      return result;
+	    }
+	    else {
+	      var i = 0;
+	      return reduce(coll, function(result, input) {
+	        if(i++ < n) {
+	          return append(result, input);
+	        }
+	        return new Reduced(result);
+	      }, empty(coll));
+	    }
+	  }
+
+	  return function(r) {
+	    var i = 0;
+	    return function(result, input) {
+	      if(i++ < n) {
+	        return r(result, input);
+	      }
+	      return new Reduced(result);
+	    };
+	  }
+	}
+
+	function drop(n, coll) {
+	  if(coll) {
+	    if(isArray(coll)) {
+	      var result = [];
+	      var index = n - 1;
+	      var len = coll.length;
+	      while(++index < len) {
+	        result.push(coll[index]);
+	      }
+	      return result;
+	    }
+	    else {
+	      var i = 0;
+	      return reduce(coll, function(result, input) {
+	        if((i++) + 1 > n) {
+	          return append(result, input);
+	        }
+	        return result;
+	      }, empty(coll));
+	    }
+	  }
+
+	  return function(r) {
+	    var i = 0;
+	    return function(result, input) {
+	      if((i++) + 1 > n) {
+	        return r(result, input);
+	      }
+	      return result;
+	    };
+	  }
+	}
+
+	function dropWhile(f, coll) {
+	  if(coll) {
+	    if(isArray(coll)) {
+	      var result = [];
+	      var index = -1;
+	      var len = coll.length;
+	      var dropping = true;
+	      while(++index < len) {
+	        if(dropping) {
+	          if(f(coll[index])) {
+	            continue;
+	          }
+	          else {
+	            dropping = false;
+	          }
+	        }
+
+	        result.push(coll[index]);
+	      }
+	      return result;
+	    }
+	    else {
+	      var dropping = true;
+	      return reduce(coll, function(result, input, i) {
+	        if(dropping) {
+	          if(f(input)) {
+	            return result;
+	          }
+	          else {
+	            dropping = false;
+	          }
+	        }
+	        return append(result, input);
+	      }, empty(coll));
+	    }
+	  }
+
+	  return function(r) {
+	    var dropping = true;
+	    return function(result, input, i) {
+	      if(dropping) {
+	        if(f(input)) {
+	          return result;
+	        }
+	        else {
+	          dropping = false;
+	        }
+	      }
+	      return r(result, input);
+	    };
+	  }
 	}
 
 	// pure transducers (doesn't take collections)
@@ -357,10 +500,11 @@ var transducers =
 
 	module.exports = {
 	  reduce: reduce,
-	  iterate: iterate,
+	  Reduced: Reduced,
 	  append: append,
 	  empty: empty,
 	  transduce: transduce,
+	  sequence: sequence,
 	  into: into,
 	  compose: compose,
 	  map: map,
@@ -369,7 +513,11 @@ var transducers =
 	  cat: cat,
 	  mapcat: mapcat,
 	  keep: keep,
-	  dedupe: dedupe
+	  dedupe: dedupe,
+	  take: take,
+	  takeWhile: takeWhile,
+	  drop: drop,
+	  dropWhile: dropWhile
 	};
 
 
