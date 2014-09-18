@@ -4,7 +4,7 @@ var sweetjs = require('gulp-sweetjs');
 var header = require('gulp-header');
 
 gulp.task('compile', function() {
-  gulp.src('tests/**/*.js')
+  gulp.src(['tests/**/*.js', 'foo.js'])
     .pipe(sourcemaps.init())
     .pipe(sweetjs({
       readableNames: true,
@@ -16,7 +16,7 @@ gulp.task('compile', function() {
 });
 
 gulp.task('watch', function() {
-  gulp.watch(['tests/**/*.js'], ['compile']);
+  gulp.watch(['tests/**/*.js', 'foo.js'], ['compile']);
 });
 
 gulp.task('default', ['compile']);
