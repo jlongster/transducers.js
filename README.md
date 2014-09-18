@@ -1,7 +1,7 @@
 
 # transducers.js
 
-A small library for generalized transformation of data. This provides a small amount a transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. *This is early work and should not be used in production yet*
+A small library for generalized transformation of data. This provides a small amount a transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. Read more in [this post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data). *This is early work and should not be used in production yet*
 
 ```
 npm install transducers.js
@@ -11,7 +11,7 @@ For browsers, grab the file `dist/transducers.js`.
 
 When writing programs, we frequently write methods that take in collections, do something with them, and return a result. The problem is that we frequently only write these functions to work a specific data structure, so if we ever change our data type or wanted to reuse that functionality, you can't. We need to decouple these kinds of concerns.
 
-A transducer is just a reducing function that transforms the value in some way. A reducing function has the form `function(result, input) {}` and returns a new result. If we express our transformations as these functions, we can easily compose them together without any knowledge of the source or destination result. [Read the introduction blog post](#) for much more thorough explanation.
+A transducer is just a reducing function that transforms the value in some way. A reducing function has the form `function(result, input) {}` and returns a new result. If we express our transformations as these functions, we can easily compose them together without any knowledge of the source or destination result. [Read the introduction blog post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data) for much more thorough explanation.
 
 Available transformations:
 
