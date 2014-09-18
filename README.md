@@ -119,7 +119,7 @@ If you are authoring a new data structure, you could provide functions for runni
 * `@@append` - add a new item to the collection
 * `@@empty` - return a newly-allocated empty collection of the same type
 
-With these two methods, we can build up new collections arbitrarily without caring our their actual implementation. They are prefixed with two `at`s because ideally they are ES6 symbols, and that's how we write them in docs. Since symbols aren't implemented everywhere yet, you can just add methods literally called `"@@append"`.
+With these two methods, we can build up new collections arbitrarily without caring about their actual implementation. They are prefixed with two `at`s because ideally they are ES6 symbols, and that's how we write them in docs. Since symbols aren't implemented everywhere yet, you can just add methods literally called `"@@append"`.
 
 With JavaScript prototypes, you can actually monkeypatch existing libraries quite easily. Let's say we wanted to use [immutable-js](https://github.com/facebook/immutable-js). It already implement the iterator protocol with a method `@@iterator`, but let's add two more:
 
