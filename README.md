@@ -90,9 +90,9 @@ var xform = compose(map(x => x * 2),
 into([], xform, [1, 2, 3, 4]);
 // -> [ 6, 8 ]
 
-console.log(into([],
+into([],
      map(kv => [kv[0], kv[1] * 2]),
-                 { x: 1, y: 2 }));
+                 { x: 1, y: 2 });
 // -> [ [ 'x', 2 ], [ 'y', 4 ] ]
 
 function *data() {
