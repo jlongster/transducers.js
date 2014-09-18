@@ -151,4 +151,4 @@ sequence(compose(
 
 You could do the same thing with ES6 `Set` and `Map` types. Separating concerns provides a powerful way to write programs that can be reused easily.
 
-[BSD LICENSE](#)
+[BSD LICENSE](https://github.com/jlongster/transducers.js/blob/master/LICENSE)
