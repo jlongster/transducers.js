@@ -1,7 +1,7 @@
 
 # transducers.js
 
-A small library for generalized transformation of data. This provides a small amount a transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. Read more in [this post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data). *This is early work and should not be used in production yet*
+A small library for generalized transformation of data. This provides a small amount a transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. Read more in [this post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data). *This is early work and should not be used in production yet*. See the [TODO list](https://github.com/jlongster/transducers.js#todo)
 
 ```
 npm install transducers.js
@@ -150,6 +150,11 @@ sequence(compose(
 ```
 
 You could do the same thing with ES6 `Set` and `Map` types. Separating concerns provides a powerful way to write programs that can be reused easily.
+
+## TODO
+
+* Possibly remove the "buildable" protocol and always return iterators. This means instead of `sequence(xform, [1, 2, 3])` you'd do `[...sequence(xform, [1, 2, 3])]`. It allows this library to focus purely on transducers. Custom data structures should take an iterator as a constructor so you can build it up.
+* Use the iterator protocol in all of the transducers and implement the high-performance transforms on top of them, instead of hard-coding the builtin array logic
 
 ## Running Tests
 
