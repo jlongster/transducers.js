@@ -8,7 +8,7 @@ function throwProtocolError(name, coll) {
                   coll);
 }
 
-function fullfillsProtocols(obj /* names ... */) {
+function fulfillsProtocols(obj /* names ... */) {
   var names = Array.prototype.slice.call(arguments, 1);
   return names.reduce(function(result, name) {
     if(symbolExists) {
@@ -105,7 +105,7 @@ function reduce(coll, f, init) {
       return f(result, [k, coll[k]], i);
     }, init);
   }
-  else if(fullfillsProtocols(coll, 'iterator')) {
+  else if(fulfillsProtocols(coll, 'iterator')) {
     var result = init;
     var iter = iterator(coll);
     var val = iter.next();
@@ -142,7 +142,7 @@ function append(coll, x) {
     }
     throw new Error('cannot append ' + x + ' to object');
   }
-  else if(fullfillsProtocols(coll, 'append')) {
+  else if(fulfillsProtocols(coll, 'append')) {
     return getProtocolMethod(coll, 'append').call(coll, x);
   }
   throwProtocolError('append', coll);
@@ -155,7 +155,7 @@ function empty(coll) {
   else if(isObject(coll)) {
     return {};
   }
-  else if(fullfillsProtocols(coll, 'empty')) {
+  else if(fulfillsProtocols(coll, 'empty')) {
     return getProtocolMethod(Object.getPrototypeOf(coll), 'empty')()
   }
   throwProtocolError('make empty', coll);
