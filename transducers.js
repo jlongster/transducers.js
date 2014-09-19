@@ -13,7 +13,7 @@ function fullfillsProtocols(obj /* names ... */) {
   return names.reduce(function(result, name) {
     if(symbolExists) {
       if(name === 'iterator') {
-        // Accept ill-formed iterators that don'y conform to the
+        // Accept ill-formed iterators that don't conform to the
         // protocol by accepting just next()
         return result && (obj[Symbol.iterator] || obj.next);
       }
@@ -63,7 +63,7 @@ function isArray(x) {
 }
 
 function isFunction(x) {
-  typeof x === 'function';
+  return typeof x === 'function';
 }
 
 function isObject(x) {
