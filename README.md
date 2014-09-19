@@ -1,7 +1,7 @@
 
 # transducers.js
 
-A small library for generalized transformation of data. This provides a small amount a transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. Read more in [this post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data). *This is early work and should not be used in production yet*. See the [TODO list](https://github.com/jlongster/transducers.js#todo)
+A small library for generalized transformation of data. This provides a small amount a transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. Read more in [this post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data). See the [TODO list](https://github.com/jlongster/transducers.js#todo). *This is early work and should not be used in production yet*.
 
 ```
 npm install transducers.js
