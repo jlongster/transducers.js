@@ -188,21 +188,7 @@ function compose() {
 
 function map(f, coll) {
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      while(++index < len) {
-        result.push(f(coll[index], index));
-      }
-      return result;
-    }
-    else {
-      var i = 0;
-      return reduce(coll, function(result, x) {
-        return append(result, f(x, i++));
-      }, empty(coll));
-    }
+    return sequence(map(f), coll);
   }
 
   return function(r) {
@@ -215,26 +201,7 @@ function map(f, coll) {
 
 function filter(f, coll) {
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      while(++index < len) {
-        if(f(coll[index], index)) {
-          result.push(coll[index]);
-        }
-      }
-      return result;
-    }
-    else {
-      var i = 0;
-      return reduce(coll, function(result, input) {
-        if(f(input, i++)) {
-          return append(result, input);
-        }
-        return result;
-      }, empty(coll));
-    }
+    return sequence(filter(f), coll);
   }
 
   return function(r) {
@@ -260,17 +227,7 @@ function dedupe(coll) {
   var last;
 
   if(coll) {
-    return reduce(
-      coll,
-      function(result, input) {
-        if(input !== last) {
-          last = input;
-          return append(result, input);
-        }
-        return result;
-      },
-      empty(coll)
-    );
+    return sequence(dedupe(), coll);
   }
 
   return function(r) {
@@ -286,28 +243,7 @@ function dedupe(coll) {
 
 function takeWhile(f, coll) {
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      while(++index < len) {
-        if(f(coll[index])) {
-          result.push(coll[index]);
-        }
-        else {
-          break;
-        }
-      }
-      return result;
-    }
-    else {
-      return reduce(coll, function(result, input) {
-        if(f(input)) {
-          return append(result, input);
-        }
-        return new Reduced(result);
-      }, empty(coll));
-    }
+    return sequence(takeWhile(f), coll);
   }
 
   return function(r) {
@@ -322,24 +258,7 @@ function takeWhile(f, coll) {
 
 function take(n, coll) {
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      while(++index < n && index < len) {
-        result.push(coll[index]);
-      }
-      return result;
-    }
-    else {
-      var i = 0;
-      return reduce(coll, function(result, input) {
-        if(i++ < n) {
-          return append(result, input);
-        }
-        return new Reduced(result);
-      }, empty(coll));
-    }
+    return sequence(take(n), coll);
   }
 
   return function(r) {
@@ -355,24 +274,7 @@ function take(n, coll) {
 
 function drop(n, coll) {
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = n - 1;
-      var len = coll.length;
-      while(++index < len) {
-        result.push(coll[index]);
-      }
-      return result;
-    }
-    else {
-      var i = 0;
-      return reduce(coll, function(result, input) {
-        if((i++) + 1 > n) {
-          return append(result, input);
-        }
-        return result;
-      }, empty(coll));
-    }
+    return sequence(drop(n), coll);
   }
 
   return function(r) {
@@ -388,39 +290,7 @@ function drop(n, coll) {
 
 function dropWhile(f, coll) {
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      var dropping = true;
-      while(++index < len) {
-        if(dropping) {
-          if(f(coll[index])) {
-            continue;
-          }
-          else {
-            dropping = false;
-          }
-        }
-
-        result.push(coll[index]);
-      }
-      return result;
-    }
-    else {
-      var dropping = true;
-      return reduce(coll, function(result, input, i) {
-        if(dropping) {
-          if(f(input)) {
-            return result;
-          }
-          else {
-            dropping = false;
-          }
-        }
-        return append(result, input);
-      }, empty(coll));
-    }
+    return sequence(dropWhile(f), coll);
   }
 
   return function(r) {

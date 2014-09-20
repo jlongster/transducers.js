@@ -133,8 +133,11 @@ describe('', () => {
   });
 
   it('dedupe should work', () => {
+    eql(dedupe([1, 2, 2, 3, 3, 3, 5]),
+        [1, 2, 3, 5]);
+
     eql(into([], dedupe(), [1, 2, 2, 3, 3, 3, 5]),
-        [1, 2, 3, 5])
+        [1, 2, 3, 5]);
   });
 
   it('keep should work', () => {
