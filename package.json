@@ -10,7 +10,7 @@
     "gulp": "^3.8.8",
     "gulp-header": "^1.1.1",
     "gulp-sourcemaps": "^1.1.5",
-    "gulp-sweetjs": "^0.5.2",
+    "gulp-sweetjs": "^0.5.4",
     "immutable": "^2.0.17",
     "lodash": "^2.4.1",
     "mocha": "^1.21.4",
