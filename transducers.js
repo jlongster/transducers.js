@@ -3,47 +3,32 @@
 
 var symbolExists = typeof Symbol !== 'undefined';
 
+var protocols = {
+  iterator: symbolExists ? Symbol.iterator : '@@iterator',
+  reducer: symbolExists ? Symbol('reducer') : '@@reducer'
+};
+
 function throwProtocolError(name, coll) {
   throw new Error("don't know how to " + name + " collection: " +
                   coll);
 }
 
-function fulfillsProtocols(obj /* names ... */) {
-  var names = Array.prototype.slice.call(arguments, 1);
-  return names.reduce(function(result, name) {
-    if(symbolExists) {
-      if(name === 'iterator') {
-        // Accept ill-formed iterators that don't conform to the
-        // protocol by accepting just next()
-        return result && (obj[Symbol.iterator] || obj.next);
-      }
-      return result && obj[Symbol.for(name)];
-    }
-    else {
-      if(name === 'iterator') {
-        // Accept ill-formed iterators that don't conform to the
-        // protocol by accepting just next()
-        return result && (obj['@@iterator'] || obj.next);
-      }
-      return result && obj['@@' + name];
-    }
-  }, true);
+function fulfillsProtocol(obj, name) {
+  if(name === 'iterator') {
+    // Accept ill-formed iterators that don't conform to the
+    // protocol by accepting just next()
+    return obj[protocols.iterator] || obj.next;
+  }
+
+  return obj[protocols[name]];
 }
 
-function getProtocolMethod(obj, name) {
-  if(symbolExists) {
-    if(name === 'iterator') {
-      return obj[Symbol.iterator];
-    }
-    else {
-      return obj[Symbol.for(name)];
-    }
-  }
-  return obj['@@' + name];
+function getProtocolProperty(obj, name) {
+  return obj[protocols[name]];
 }
 
 function iterator(coll) {
-  var iter = getProtocolMethod(coll, 'iterator');
+  var iter = getProtocolProperty(coll, 'iterator');
   if(iter) {
     return iter.call(coll);
   }
@@ -57,6 +42,9 @@ function iterator(coll) {
   else if(isArray(coll)) {
     return new ArrayIterator(coll);
   }
+  else if(isObject(coll)) {
+    return new ObjectIterator(coll);
+  }
 }
 
 function ArrayIterator(arr) {
@@ -68,6 +56,25 @@ ArrayIterator.prototype.next = function() {
   if(this.index < this.arr.length) {
     return {
       value: this.arr[this.index++],
+      done: false
+    };
+  }
+  return {
+    done: true
+  }
+};
+
+function ObjectIterator(obj) {
+  this.obj = obj;
+  this.keys = Object.keys(obj);
+  this.index = 0;
+}
+
+ObjectIterator.prototype.next = function() {
+  if(this.index < this.keys.length) {
+    var k = this.keys[this.index++];
+    return {
+      value: [k, this.obj[k]],
       done: false
     };
   }
@@ -117,7 +124,7 @@ function reduce(coll, f, init) {
       return f(result, [k, coll[k]], i);
     }, init);
   }
-  else if(fulfillsProtocols(coll, 'iterator')) {
+  else if(fulfillsProtocol(coll, 'iterator')) {
     var result = init;
     var iter = iterator(coll);
     var val = iter.next();
@@ -156,25 +163,72 @@ function compose() {
 
 // transformations
 
-function map(f, coll) {
-  if(coll) {
-    return sequence(map(f), coll);
+function bound(f, ctx, count) {
+  count = count != null ? count : 1;
 
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      while(++index < len) {
-        result.push(f(coll[index], index));
+  if(!ctx) {
+    return f;
+  }
+  else {
+    switch(count) {
+    case 1:
+      return function(x) {
+        return f.call(ctx, x);
       }
-      return result;
+    case 2:
+      return function(x, y) {
+        return f.call(ctx, x, y);
+      }
+    default:
+      return f.bind(ctx);
     }
-    else {
-      var i = 0;
-      return reduce(coll, function(result, x) {
-        return append(result, f(x, i++));
-      }, empty(coll));
+  }
+}
+
+function arrayMap(f, arr, ctx) {
+  var index = -1;
+  var length = arr.length;
+  var result = Array(length);
+  f = bound(f, ctx, 2);
+
+  while (++index < length) {
+    result[index] = f(arr[index], index);
+  }
+  return result;
+}
+
+function arrayFilter(f, arr, ctx) {
+  var len = arr.length;
+  var result = [];
+  f = bound(f, ctx, 2);
+
+  for(var i=0; i<len; i++) {
+    if(f(arr[i], i)) {
+      result.push(arr[i]);
     }
+  }
+  return result;
+}
+
+function map(f, coll, ctx) {
+  f = bound(f, ctx)
+
+  if(coll) {
+    if(isArray(coll)) {
+      return arrayMap(f, coll, ctx);
+    }
+
+    var reducer = getReducer(coll);
+    var result = reducer.init();
+    var append = reducer.step;
+
+    var iter = iterator(coll);
+    var cur = iter.next();
+    while(!cur.done) {
+      result = append(result, f(cur.value));
+      cur = iter.next();
+    }
+    return result;
   }
 
   return function(r) {
@@ -192,28 +246,27 @@ function map(f, coll) {
   }
 }
 
-function filter(f, coll) {
+function filter(f, coll, ctx) {
+  f = bound(f, ctx)
+
   if(coll) {
     if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      while(++index < len) {
-        if(f(coll[index], index)) {
-          result.push(coll[index]);
-        }
+      return arrayFilter(f, coll, ctx);
+    }
+
+    var reducer = getReducer(coll);
+    var result = reducer.init();
+    var append = reducer.step;
+
+    var iter = iterator(coll);
+    var cur = iter.next();
+    while(!cur.done) {
+      if(f(cur.value)) {
+        result = append(result, cur.value);
       }
-      return result;
+      cur = iter.next();
     }
-    else {
-      var i = 0;
-      return reduce(coll, function(result, input) {
-        if(f(input, i++)) {
-          return append(result, input);
-        }
-        return result;
-      }, empty(coll));
-    }
+    return result;
   }
 
   return function(r) {
@@ -234,32 +287,36 @@ function filter(f, coll) {
   }
 }
 
-function remove(f, coll) {
+function remove(f, coll, ctx) {
+  f = bound(f, ctx);
   return filter(function(x) { return !f(x); }, coll);
 }
 
-function keep(f, coll) {
+function keep(f, coll, ctx) {
+  f = bound(f, ctx);
   return filter(function(x) { return x != null }, coll);
 }
 
 function dedupe(coll) {
-  var last;
-
   if(coll) {
-    return reduce(
-      coll,
-      function(result, input) {
-        if(input !== last) {
-          last = input;
-          return append(result, input);
-        }
-        return result;
-      },
-      empty(coll)
-    );
+    var reducer = getReducer(coll);
+    var result = reducer.init();
+    var append = reducer.step;
+
+    var last;
+    var iter = iterator(coll);
+    var cur = iter.next();
+    while(!cur.done) {
+      if(cur.value !== last) {
+        result = append(result, cur.value);
+      }
+      cur = iter.next();
+    }
+    return result;
   }
 
   return function(r) {
+    var last;
     return {
       init: function() {
         return r.init();
@@ -279,29 +336,25 @@ function dedupe(coll) {
 }
 
 function takeWhile(f, coll) {
+  f = bound(f, ctx);
+
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      while(++index < len) {
-        if(f(coll[index])) {
-          result.push(coll[index]);
-        }
-        else {
-          break;
-        }
+    var reducer = getReducer(coll);
+    var result = reducer.init();
+    var append = reducer.step;
+
+    var iter = iterator(coll);
+    var cur = iter.next();
+    while(!cur.done) {
+      if(f(cur.value)) {
+        result = append(result, cur.value);
       }
-      return result;
+      else {
+        break;
+      }
+      cur = iter.next();
     }
-    else {
-      return reduce(coll, function(result, input) {
-        if(f(input)) {
-          return append(result, input);
-        }
-        return new Reduced(result);
-      }, empty(coll));
-    }
+    return result;
   }
 
   return function(r) {
@@ -324,24 +377,18 @@ function takeWhile(f, coll) {
 
 function take(n, coll) {
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      while(++index < n && index < len) {
-        result.push(coll[index]);
-      }
-      return result;
+    var reducer = getReducer(coll);
+    var result = reducer.init();
+    var append = reducer.step;
+
+    var index = 0;
+    var iter = iterator(coll);
+    var cur = iter.next();
+    while(index++ < n && !cur.done) {
+      result = append(result, cur.value);
+      cur = iter.next();
     }
-    else {
-      var i = 0;
-      return reduce(coll, function(result, input) {
-        if(i++ < n) {
-          return append(result, input);
-        }
-        return new Reduced(result);
-      }, empty(coll));
-    }
+    return result;
   }
 
   return function(r) {
@@ -365,24 +412,20 @@ function take(n, coll) {
 
 function drop(n, coll) {
   if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = n - 1;
-      var len = coll.length;
-      while(++index < len) {
-        result.push(coll[index]);
+    var reducer = getReducer(coll);
+    var result = reducer.init();
+    var append = reducer.step;
+
+    var index = 0;
+    var iter = iterator(coll);
+    var cur = iter.next();
+    while(!cur.done) {
+      if(++index > n) {
+        result = append(result, cur.value);
       }
-      return result;
+      cur = iter.next();
     }
-    else {
-      var i = 0;
-      return reduce(coll, function(result, input) {
-        if((i++) + 1 > n) {
-          return append(result, input);
-        }
-        return result;
-      }, empty(coll));
-    }
+    return result;
   }
 
   return function(r) {
@@ -405,40 +448,26 @@ function drop(n, coll) {
 }
 
 function dropWhile(f, coll) {
-  if(coll) {
-    if(isArray(coll)) {
-      var result = [];
-      var index = -1;
-      var len = coll.length;
-      var dropping = true;
-      while(++index < len) {
-        if(dropping) {
-          if(f(coll[index])) {
-            continue;
-          }
-          else {
-            dropping = false;
-          }
-        }
+  f = bound(f, ctx);
 
-        result.push(coll[index]);
+  if(coll) {
+    var reducer = getReducer(coll);
+    var result = reducer.init();
+    var append = reducer.step;
+
+    var dropping = true;
+    var iter = iterator(coll);
+    var cur = iter.next();
+    while(!cur.done) {
+      if(dropping && !f(cur.value)) {
+        dropping = false;
       }
-      return result;
+      else {
+        result = append(result, cur.value);
+      }
+      cur = iter.next();
     }
-    else {
-      var dropping = true;
-      return reduce(coll, function(result, input, i) {
-        if(dropping) {
-          if(f(input)) {
-            return result;
-          }
-          else {
-            dropping = false;
-          }
-        }
-        return append(result, input);
-      }, empty(coll));
-    }
+    return result;
   }
 
   return function(r) {
@@ -481,74 +510,81 @@ function cat(r) {
   };
 }
 
-function mapcat(f) {
+function mapcat(f, ctx) {
+  f = bound(f, ctx);
   return compose(map(f), cat);
 }
 
 // collection helpers
 
-var append = {
+function push(arr, x) {
+  arr.push(x);
+  return arr;
+}
+
+function merge(obj, x) {
+  if(isArray(x) && x.length === 2) {
+    obj[x[0]] = x[1];
+  }
+  else {
+    var keys = Object.keys(x);
+    var len = keys.length;
+    for(var i=0; i<len; i++) {
+      obj[keys[i]] = x[keys[i]];
+    }
+  }
+  return obj;
+}
+
+var arrayReducer = {
   init: function() {
     return [];
   },
-
   finalize: function(v) {
     return v;
   },
-
-  step: function(coll, x) {
-    if(isArray(coll)) {
-      coll.push(x);
-      return coll;
-    }
-    else if(isObject(coll)) {
-      if(isObject(x)) {
-        var keys = Object.keys(x);
-        for(var i=0; i<keys.length; i++) {
-          coll[keys[i]] = x[keys[i]];
-        }
-        return coll;
-      }
-      else if(isArray(x) && x.length === 2) {
-        coll[x[0]] = x[1];
-        return coll;
-      }
-      throw new Error('cannot append ' + x + ' to object');
-    }
-    throwProtocolError('append', coll);
-
-    return _append(res, v);
-  },
+  step: push
 }
 
-function empty(coll) {
+var objReducer = {
+  init: function() {
+    return {};
+  },
+  finalize: function(v) {
+    return v;
+  },
+  step: merge
+};
+
+function getReducer(coll) {
   if(isArray(coll)) {
-    return [];
+    return arrayReducer;
   }
   else if(isObject(coll)) {
-    return {};
+    return objReducer;
   }
-  throwProtocolError('make empty', coll);
+  else if(fulfillsProtocol(coll, 'reducer')) {
+    return getProtocolProperty(coll, 'reducer');
+  }
+  throwProtocolError('getReducer', coll);
 }
 
-function isBuildable(coll) {
-  return isArray(coll) || isObject(coll);
-}
+// building new collections
 
 function array(xform, coll) {
   if(!coll) {
     coll = xform;
-    return reduce(coll, append.step, []);
+    return reduce(coll, push, []);
   }
-  return transduce(xform, append, [], coll);
+  return transduce(xform, arrayReducer, [], coll);
 }
 
 function obj(xform, coll) {
   if(!coll) {
     coll = xform;
-    return reduce(coll, append.step, {});
+    return reduce(coll, merge, {});
   }
-  return transduce(xform, append, {}, coll);
+  return transduce(xform, objReducer, {}, coll);
 }
 
 function iter(xform, coll) {
@@ -560,17 +596,39 @@ function iter(xform, coll) {
 }
 
 function seq(xform, coll) {
-  if(isBuildable(coll)) {
-    return transduce(xform, append, empty(coll), coll);
+  if(isArray(coll)) {
+    return transduce(xform, arrayReducer, [], coll);
   }
-  else {
+  else if(isObject(coll)) {
+    return transduce(xform, objReducer, {}, coll);
+  }
+  else if(fulfillsProtocol(coll, 'reducer')) {
+    var reducer = getProtocolProperty(coll, 'reducer');
+    return transduce(xform, reducer, reducer.init(), coll);
+  }
+  else if(fulfillsProtocol(coll, 'iterator')) {
     return new LazyTransformer(xform, coll);
   }
+  throwProtocolError('sequence', coll);
 }
 
 function into(to, xform, from) {
-  return transduce(xform, append, to, from);
+  if(isArray(to)) {
+    return transduce(xform, arrayReducer, to, from);
+  }
+  else if(isObject(to)) {
+    return transduce(xform, objReducer, to, from);
+  }
+  else if(fulfillsProtocol(to, 'reducer')) {
+    return transduce(xform,
+                     getProtocolProperty('reducer'),
+                     to,
+                     from);
+  }
+  throwProtocolError('into', to);
 }
+
+// laziness
 
 var stepper = {
   finalize: function(v) {
@@ -632,6 +690,8 @@ LazyTransformer.prototype.step = function() {
   }
 }
 
+// util
+
 function range(n) {
   var arr = new Array(n);
   for(var i=0; i<arr.length; i++) {
@@ -644,8 +704,8 @@ function range(n) {
 module.exports = {
   reduce: reduce,
   Reduced: Reduced,
-  append: append,
-  empty: empty,
+  push: push,
+  merge: merge,
   transduce: transduce,
   seq: seq,
   array: array,
@@ -665,5 +725,6 @@ module.exports = {
   drop: drop,
   dropWhile: dropWhile,
 
+  protocols: protocols,
   LazyTransformer: LazyTransformer
 };
