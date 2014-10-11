@@ -61,6 +61,10 @@ function iterator(coll) {
 function isArray(x) {
   return x instanceof Array;
 }
+var toString = Object.prototype.toString;
+var isArray = typeof Array.isArray === 'function' ? Array.isArray : function(obj) {
+  return toString.call(obj) == '[object Array]';
+};
 
 function isFunction(x) {
   return typeof x === 'function';
