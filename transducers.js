@@ -120,8 +120,8 @@ function reduce(coll, f, init) {
     return result;
   }
   else if(isObject(coll)) {
-    return reduce(Object.keys(coll), function(result, k, i) {
-      return f(result, [k, coll[k]], i);
+    return reduce(Object.keys(coll), function(result, k) {
+      return f(result, [k, coll[k]]);
     }, init);
   }
   else if(fulfillsProtocol(coll, 'iterator')) {
@@ -140,14 +140,14 @@ function reduce(coll, f, init) {
   throwProtocolError('reduce', coll);
 }
 
-function transduce(xform, transducer, init, coll) {
-  transducer = xform(transducer);
+function transduce(xform, reducer, init, coll) {
+  reducer = xform(reducer);
   if(!coll) {
     coll = init;
-    init = transducer.init();
+    init = reducer.init();
   }
-  var res = reduce(coll, transducer.step, init);
-  return transducer.finalize(res);
+  var res = reduce(coll, reducer.step, init);
+  return reducer.finalize(res);
 }
 
 function compose() {
@@ -162,6 +162,18 @@ function compose() {
 }
 
 // transformations
+
+function reducer(f) {
+  return {
+    init: function() {
+      throw new Error('init value unavailable');
+    },
+    finalize: function(v) {
+      return v;
+    },
+    step: f
+  };
+}
 
 function bound(f, ctx, count) {
   count = count != null ? count : 1;
@@ -211,7 +223,9 @@ function arrayFilter(f, arr, ctx) {
 }
 
 function map(f, coll, ctx) {
-  f = bound(f, ctx)
+  //if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
+  //var f2 = ctx ? bound(f, ctx) : f;
+  f = bound(f, ctx);
 
   if(coll) {
     if(isArray(coll)) {
@@ -247,7 +261,7 @@ function map(f, coll, ctx) {
 }
 
 function filter(f, coll, ctx) {
-  f = bound(f, ctx)
+  f = bound(f, ctx);
 
   if(coll) {
     if(isArray(coll)) {
@@ -335,7 +349,7 @@ function dedupe(coll) {
   }
 }
 
-function takeWhile(f, coll) {
+function takeWhile(f, coll, ctx) {
   f = bound(f, ctx);
 
   if(coll) {
@@ -439,7 +453,7 @@ function drop(n, coll) {
       },
       step: function(result, input) {
         if((i++) + 1 > n) {
-          return r(result, input);
+          return r.step(result, input);
         }
         return result;
       }
@@ -447,7 +461,7 @@ function drop(n, coll) {
   }
 }
 
-function dropWhile(f, coll) {
+function dropWhile(f, coll, ctx) {
   f = bound(f, ctx);
 
   if(coll) {
@@ -459,12 +473,12 @@ function dropWhile(f, coll) {
     var iter = iterator(coll);
     var cur = iter.next();
     while(!cur.done) {
-      if(dropping && !f(cur.value)) {
-        dropping = false;
+      if(dropping && f(cur.value)) {
+        cur = iter.next();
+        continue;
       }
-      else {
-        result = append(result, cur.value);
-      }
+      dropping = false;
+      result = append(result, cur.value);
       cur = iter.next();
     }
     return result;
@@ -621,7 +635,7 @@ function into(to, xform, from) {
   }
   else if(fulfillsProtocol(to, 'reducer')) {
     return transduce(xform,
-                     getProtocolProperty('reducer'),
+                     getProtocolProperty(to, 'reducer'),
                      to,
                      from);
   }
@@ -703,6 +717,7 @@ function range(n) {
 
 module.exports = {
   reduce: reduce,
+  reducer: reducer,
   Reduced: Reduced,
   push: push,
   merge: merge,
@@ -724,6 +739,7 @@ module.exports = {
   takeWhile: takeWhile,
   drop: drop,
   dropWhile: dropWhile,
+  range: range,
 
   protocols: protocols,
   LazyTransformer: LazyTransformer
