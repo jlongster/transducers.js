@@ -146,8 +146,10 @@ function transduce(xform, reducer, init, coll) {
     coll = init;
     init = reducer.init();
   }
-  var res = reduce(coll, reducer.step, init);
-  return reducer.finalize(res);
+  var res = reduce(coll, function(res, input) {
+    return reducer.step(res, input);
+  }, init);
+  return reducer.result(res);
 }
 
 function compose() {
@@ -168,7 +170,7 @@ function reducer(f) {
     init: function() {
       throw new Error('init value unavailable');
     },
-    finalize: function(v) {
+    result: function(v) {
       return v;
     },
     step: f
@@ -222,6 +224,23 @@ function arrayFilter(f, arr, ctx) {
   return result;
 }
 
+function Map(f, xform) {
+  this.xform = xform;
+  this.f = f;
+}
+
+Map.prototype.init = function() {
+  return this.xform.init();
+};
+
+Map.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+Map.prototype.step = function(res, input) {
+  return this.xform.step(res, this.f(input));
+};
+
 function map(f, coll, ctx) {
   //if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
   //var f2 = ctx ? bound(f, ctx) : f;
@@ -234,31 +253,40 @@ function map(f, coll, ctx) {
 
     var reducer = getReducer(coll);
     var result = reducer.init();
-    var append = reducer.step;
 
     var iter = iterator(coll);
     var cur = iter.next();
     while(!cur.done) {
-      result = append(result, f(cur.value));
+      result = reducer.step(result, f(cur.value));
       cur = iter.next();
     }
     return result;
   }
 
-  return function(r) {
-    return {
-      init: function() {
-        return r.init();
-      },
-      finalize: function(v) {
-        return r.finalize(v);
-      },
-      step: function(res, input) {
-        return r.step(res, f(input));
-      }
-    };
+  return function(xform) {
+    return new Map(f, xform);
   }
 }
+
+function Filter(f, xform) {
+  this.xform = xform;
+  this.f = f;
+}
+
+Filter.prototype.init = function() {
+  return this.xform.init();
+};
+
+Filter.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+Filter.prototype.step = function(res, input) {
+  if(this.f(input)) {
+    return this.xform.step(res, input);
+  }
+  return res;
+};
 
 function filter(f, coll, ctx) {
   f = bound(f, ctx);
@@ -270,35 +298,21 @@ function filter(f, coll, ctx) {
 
     var reducer = getReducer(coll);
     var result = reducer.init();
-    var append = reducer.step;
 
     var iter = iterator(coll);
     var cur = iter.next();
     while(!cur.done) {
       if(f(cur.value)) {
-        result = append(result, cur.value);
+        result = reducer.step(result, cur.value);
       }
       cur = iter.next();
     }
     return result;
   }
 
-  return function(r) {
-    return {
-      init: function() {
-        return r.init();
-      },
-      finalize: function(v) {
-        return r.finalize(v);
-      },
-      step: function(res, input) {
-        if(f(input)) {
-          return r.step(res, input);
-        }
-        return res;
-      }
-    }
-  }
+  return function(xform) {
+    return new Filter(f, xform);
+  };
 }
 
 function remove(f, coll, ctx) {
@@ -335,8 +349,8 @@ function dedupe(coll) {
       init: function() {
         return r.init();
       },
-      finalize: function(v) {
-        return r.finalize(v);
+      result: function(v) {
+        return r.result(v);
       },
       step: function(result, input) {
         if(input !== last) {
@@ -355,13 +369,12 @@ function takeWhile(f, coll, ctx) {
   if(coll) {
     var reducer = getReducer(coll);
     var result = reducer.init();
-    var append = reducer.step;
 
     var iter = iterator(coll);
     var cur = iter.next();
     while(!cur.done) {
       if(f(cur.value)) {
-        result = append(result, cur.value);
+        result = reducer.step(result, cur.value);
       }
       else {
         break;
@@ -376,8 +389,8 @@ function takeWhile(f, coll, ctx) {
       init: function() {
         return r.init();
       },
-      finalize: function(v) {
-        return r.finalize(v);
+      result: function(v) {
+        return r.result(v);
       },
       step: function(result, input) {
         if(f(input)) {
@@ -393,13 +406,12 @@ function take(n, coll) {
   if(coll) {
     var reducer = getReducer(coll);
     var result = reducer.init();
-    var append = reducer.step;
 
     var index = 0;
     var iter = iterator(coll);
     var cur = iter.next();
     while(index++ < n && !cur.done) {
-      result = append(result, cur.value);
+      result = reducer.step(result, cur.value);
       cur = iter.next();
     }
     return result;
@@ -411,8 +423,8 @@ function take(n, coll) {
       init: function() {
         return r.init();
       },
-      finalize: function(v) {
-        return r.finalize(v);
+      result: function(v) {
+        return r.result(v);
       },
       step: function(result, input) {
         if(i++ < n) {
@@ -428,14 +440,13 @@ function drop(n, coll) {
   if(coll) {
     var reducer = getReducer(coll);
     var result = reducer.init();
-    var append = reducer.step;
 
     var index = 0;
     var iter = iterator(coll);
     var cur = iter.next();
     while(!cur.done) {
       if(++index > n) {
-        result = append(result, cur.value);
+        result = reducer.step(result, cur.value);
       }
       cur = iter.next();
     }
@@ -448,8 +459,8 @@ function drop(n, coll) {
       init: function() {
         return r.init();
       },
-      finalize: function(v) {
-        return r.finalize(v);
+      result: function(v) {
+        return r.result(v);
       },
       step: function(result, input) {
         if((i++) + 1 > n) {
@@ -467,7 +478,6 @@ function dropWhile(f, coll, ctx) {
   if(coll) {
     var reducer = getReducer(coll);
     var result = reducer.init();
-    var append = reducer.step;
 
     var dropping = true;
     var iter = iterator(coll);
@@ -478,7 +488,7 @@ function dropWhile(f, coll, ctx) {
         continue;
       }
       dropping = false;
-      result = append(result, cur.value);
+      result = reducer.step(result, cur.value);
       cur = iter.next();
     }
     return result;
@@ -490,8 +500,8 @@ function dropWhile(f, coll, ctx) {
       init: function() {
         return r.init();
       },
-      finalize: function(v) {
-        return r.finalize(v);
+      result: function(v) {
+        return r.result(v);
       },
       step: function(result, input, i) {
         if(dropping) {
@@ -508,20 +518,30 @@ function dropWhile(f, coll, ctx) {
   }
 }
 
-// pure transducers (doesn't take collections)
+// pure transducers (cannot take collections)
 
-function cat(r) {
-  return {
-    init: function() {
-      return r.init();
-    },
-    finalize: function(v) {
-      return r.finalize(v);
-    },
-    step: function(result, input) {
-      return reduce(input, r.step, result);
-    }
-  };
+function Cat(xform) {
+  this.xform = xform;
+}
+
+Cat.prototype.init = function() {
+  return this.xform.init();
+};
+
+Cat.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+Cat.prototype.step = function(result, input) {
+  var xform = this.xform;
+
+  return reduce(input, function(res, input) {
+    return xform.step(res, input)
+  }, result);
+};
+
+function cat(xform) {
+  return new Cat(xform);
 }
 
 function mapcat(f, ctx) {
@@ -554,7 +574,7 @@ var arrayReducer = {
   init: function() {
     return [];
   },
-  finalize: function(v) {
+  result: function(v) {
     return v;
   },
   step: push
@@ -564,7 +584,7 @@ var objReducer = {
   init: function() {
     return {};
   },
-  finalize: function(v) {
+  result: function(v) {
     return v;
   },
   step: merge
@@ -645,7 +665,7 @@ function into(to, xform, from) {
 // laziness
 
 var stepper = {
-  finalize: function(v) {
+  result: function(v) {
     return (v instanceof Reduced) ? v.val : v;
   },
   step: function(lt, x) {
@@ -665,7 +685,7 @@ Stepper.prototype.step = function(lt) {
     var n = this.iter.next();
     if(n.done || n.value instanceof Reduced) {
       // finalize
-      this.xform.finalize(this);
+      this.xform.result(this);
       break;
     }
 

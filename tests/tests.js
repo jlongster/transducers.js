@@ -23,7 +23,7 @@ Immutable.Vector.prototype[protocols.reducer] = {
   init: function() {
     return Immutable.Vector();
   },
-  finalize: function(vec) {
+  result: function(vec) {
     return vec;
   },
   step: function(vec, x) {
@@ -112,7 +112,7 @@ describe('', () => {
     immutEql(filter(x => x % 2 === 0, Immutable.Vector(1, 2, 3, 4)),
              Immutable.Vector(2, 4));
 
-    eql(transduce(filter(x => x % 2 ===0),
+    eql(transduce(filter(x => x % 2 === 0),
                   reducer(add),
                   0,
                   [1, 2, 3]),
