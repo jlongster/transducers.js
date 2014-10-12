@@ -1,9 +1,12 @@
 var expect = require('expect.js');
 var Immutable = require('immutable');
-var { reduce, reducer, iterate, push, merge, empty, transduce,
-      seq, into, compose, map, filter, remove,
+var t = require('../transducers');
+var { reduce, reducer, array, obj, iter, iterate, push, merge, empty,
+      transduce, seq, into, compose, map, filter, remove,
       cat, mapcat, keep, dedupe, take, takeWhile,
-      drop, dropWhile, protocols } = require('../transducers');
+      drop, dropWhile, protocols } = t;
+
+var context = { num: 5 };
 
 // utility
 
@@ -84,14 +87,19 @@ describe('', () => {
   });
 
   it('map should work', () => {
-    eql(map(x => x + 1, [1, 2, 3, 4]),
+    eql(map([1, 2, 3, 4], x => x + 1),
         [2, 3, 4, 5]);
-    eql(map(x => [x[0], x[1] + 1], { x: 1, y: 2 }),
+    eql(map({ x: 1, y: 2 }, x => [x[0], x[1] + 1]),
         { x: 2, y: 3 });
-    eql(map((x, i) => i, [1, 2, 3, 4]),
+    eql(map([1, 2, 3, 4], (x, i) => i),
         [0, 1, 2, 3]);
+    eql(map([1, 2, 3, 4], function(x) { return x + this.num }, context),
+        [6, 7, 8, 9]);
+    eql(seq([1, 2, 3, 4],
+            map(function(x) { return x + this.num }, context)),
+        [6, 7, 8, 9]);
 
-    immutEql(map(x => x + 1, Immutable.Vector(1, 2, 3, 4)),
+    immutEql(map(Immutable.Vector(1, 2, 3, 4), x => x + 1),
              Immutable.Vector(2, 3, 4, 5));
 
     eql(transduce(map(x => x * 2),
@@ -102,14 +110,16 @@ describe('', () => {
   });
 
   it('filter should work', () => {
-    eql(filter(x => x % 2 === 0, [1, 2, 3, 4]),
+    eql(filter([1, 2, 3, 4], x => x % 2 === 0),
         [2, 4]);
-    eql(filter(x => x[1] % 2 === 0, { x: 1, y: 2 }),
+    eql(filter({ x: 1, y: 2 }, x => x[1] % 2 === 0),
         { y: 2 });
-    eql(filter((x, i) => i !== 0, [1, 2, 3, 4]),
+    eql(filter([1, 2, 3, 4], (x, i) => i !== 0),
         [2, 3, 4]);
+    eql(filter([4, 5, 6], function(x) { return x >= this.num }, context),
+        [5, 6]);
 
-    immutEql(filter(x => x % 2 === 0, Immutable.Vector(1, 2, 3, 4)),
+    immutEql(filter(Immutable.Vector(1, 2, 3, 4), x => x % 2 === 0),
              Immutable.Vector(2, 4));
 
     eql(transduce(filter(x => x % 2 === 0),
@@ -120,12 +130,14 @@ describe('', () => {
   });
 
   it('remove should work', () => {
-    eql(remove(x => x % 2 === 0, [1, 2, 3, 4]),
+    eql(remove([1, 2, 3, 4], x => x % 2 === 0),
         [1, 3]);
-    eql(remove(x => x[1] % 2 === 0, { x: 1, y: 2 }),
+    eql(remove({ x: 1, y: 2 }, x => x[1] % 2 === 0),
         { x: 1 });
+    eql(remove([4, 5, 6], function(x) { return x < this.num }, context),
+        [5, 6]);
 
-    immutEql(remove(x => x % 2 === 0, Immutable.Vector(1, 2, 3, 4)),
+    immutEql(remove(Immutable.Vector(1, 2, 3, 4), x => x % 2 === 0),
              Immutable.Vector(1, 3));
 
     eql(transduce(remove(x => x % 2 ===0),
@@ -163,10 +175,12 @@ describe('', () => {
       }
     }
 
-    eql(takeWhile(lt(3), [1, 2, 3, 2]), [1, 2]);
-    eql(takeWhile(lt(10), [1, 2, 3, 4]), [1, 2, 3, 4])
+    eql(takeWhile([1, 2, 3, 2], lt(3)), [1, 2]);
+    eql(takeWhile([1, 2, 3, 4], lt(10)), [1, 2, 3, 4])
+    eql(takeWhile([4, 5, 6], function(x) { return x < this.num }, context),
+        [4]);
 
-    immutEql(takeWhile(lt(3), Immutable.Vector(1, 2, 3, 2)),
+    immutEql(takeWhile(Immutable.Vector(1, 2, 3, 2), lt(3)),
              Immutable.Vector(1, 2))
 
     eql(into([], takeWhile(lt(3)), [1, 2, 3, 2]),
@@ -191,10 +205,12 @@ describe('', () => {
       }
     }
 
-    eql(dropWhile(lt(3), [1, 2, 3, 2]), [3, 2]);
-    eql(dropWhile(lt(10), [1, 2, 3, 4]), []);
+    eql(dropWhile([1, 2, 3, 2], lt(3)), [3, 2]);
+    eql(dropWhile([1, 2, 3, 4], lt(10)), []);
+    eql(dropWhile([4, 5, 6], function(x) { return x < this.num }, context),
+        [5, 6]);
 
-    immutEql(dropWhile(lt(3), Immutable.Vector(1, 2, 3, 2)),
+    immutEql(dropWhile(Immutable.Vector(1, 2, 3, 2), lt(3)),
              Immutable.Vector(3, 2));
 
     eql(into([], dropWhile(lt(3)), [1, 2, 3, 2]),
@@ -214,10 +230,17 @@ describe('', () => {
   it('mapcat should work', () => {
     eql(into([],
              mapcat(arr => {
-                    return map(x => x + 1, arr);
+               return map(arr, x => x + 1);
              }),
              [[1, 2], [3, 4]]),
         [2, 3, 4, 5]);
+
+    eql(into([],
+             mapcat(function(arr) {
+               return map(arr, x => x + this.num);
+             }, context),
+             [[1, 2], [3, 4]]),
+        [6, 7, 8, 9]);
   });
 
   it('into should work', () => {
@@ -238,12 +261,12 @@ describe('', () => {
   });
 
   it('seq should work', () => {
-    eql(seq(map(x => x + 1), [1, 2, 3, 4]),
+    eql(seq([1, 2, 3, 4], map(x => x + 1)),
         [2, 3, 4, 5]);
-    eql(seq(map(x => [x[0], x[1] + 1]), { x: 10, y: 20 }),
+    eql(seq({ x: 10, y: 20 }, map(x => [x[0], x[1] + 1])),
         { x: 11, y: 21 });
 
-    immutEql(seq(map(x => x + 1), Immutable.Vector(1, 2, 3)),
+    immutEql(seq(Immutable.Vector(1, 2, 3), map(x => x + 1)),
              Immutable.Vector(2, 3, 4));
   });
 
@@ -290,5 +313,47 @@ describe('', () => {
                          filter(x => x > 2)),
              [1, 2, 3, 4]),
         [4, 3, 6, 4, 8]);
+  });
+
+  it('array should work', function() {
+    var nums = {
+      i: 0,
+      next: function() {
+        return {
+          value: this.i++,
+          done: false
+        };
+      },
+    };
+
+    eql(array([1, 2, 3]), [1, 2, 3]);
+    eql(array([1, 2, 3, 4], take(3)),
+        [1, 2, 3]);
+    eql(array(nums, take(6)),
+        [0, 1, 2, 3, 4, 5]);
+  });
+
+  it('obj should work', function() {
+    eql(obj([['foo', 1], ['bar', 2]]),
+        { foo: 1, bar: 2 });
+    eql(obj({ foo: 1, bar: 2 }, map(kv => [kv[0], kv[1] + 1])),
+        { foo: 2, bar: 3 });
+  });
+
+  it('iter should work', function() {
+    var nums = {
+      i: 0,
+      next: function() {
+        return {
+          value: this.i++,
+          done: false
+        };
+      },
+    };
+
+    var lt = iter(nums, map(x => x * 2));
+    expect(lt instanceof t.LazyTransformer).to.be.ok();
+    expect(array(lt, take(5)),
+           [0, 2, 4, 6, 8]);
   });
 });

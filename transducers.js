@@ -119,11 +119,6 @@ function reduce(coll, f, init) {
     }
     return result;
   }
-  else if(isObject(coll)) {
-    return reduce(Object.keys(coll), function(result, k) {
-      return f(result, [k, coll[k]]);
-    }, init);
-  }
   else if(fulfillsProtocol(coll, 'iterator')) {
     var result = init;
     var iter = iterator(coll);
@@ -136,6 +131,11 @@ function reduce(coll, f, init) {
       val = iter.next();
     }
     return result;
+  }
+  else if(isObject(coll)) {
+    return reduce(Object.keys(coll), function(result, k) {
+      return f(result, [k, coll[k]]);
+    }, init);
   }
   throwProtocolError('reduce', coll);
 }
@@ -249,7 +249,7 @@ function map(coll, f, ctx) {
     if(isArray(coll)) {
       return arrayMap(f, coll, ctx);
     }
-    return seq(map(f), coll);
+    return seq(coll, map(f));
   }
 
   return function(xform) {
@@ -277,14 +277,15 @@ Filter.prototype.step = function(res, input) {
   return res;
 };
 
-function filter(f, coll, ctx) {
+function filter(coll, f, ctx) {
+  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
   f = bound(f, ctx);
 
   if(coll) {
     if(isArray(coll)) {
       return arrayFilter(f, coll, ctx);
     }
-    return seq(filter(f), coll);
+    return seq(coll, filter(f));
   }
 
   return function(xform) {
@@ -292,14 +293,16 @@ function filter(f, coll, ctx) {
   };
 }
 
-function remove(f, coll, ctx) {
+function remove(coll, f, ctx) {
+  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
   f = bound(f, ctx);
-  return filter(function(x) { return !f(x); }, coll);
+  return filter(coll, function(x) { return !f(x); });
 }
 
-function keep(f, coll, ctx) {
+function keep(coll, f, ctx) {
+  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
   f = bound(f, ctx);
-  return filter(function(x) { return x != null }, coll);
+  return filter(coll, function(x) { return x != null });
 }
 
 function Dedupe(xform) {
@@ -325,7 +328,7 @@ Dedupe.prototype.step = function(result, input) {
 
 function dedupe(coll) {
   if(coll) {
-    return seq(dedupe(), coll);
+    return seq(coll, dedupe());
   }
 
   return function(xform) {
@@ -353,11 +356,12 @@ TakeWhile.prototype.step = function(result, input) {
   return new Reduced(result);
 };
 
-function takeWhile(f, coll, ctx) {
+function takeWhile(coll, f, ctx) {
+  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
   f = bound(f, ctx);
 
   if(coll) {
-    return seq(takeWhile(f), coll);
+    return seq(coll, takeWhile(f));
   }
 
   return function(xform) {
@@ -388,7 +392,7 @@ Take.prototype.step = function(result, input) {
 
 function take(n, coll) {
   if(coll) {
-    return seq(take(n), coll);
+    return seq(coll, take(n));
   }
 
   return function(xform) {
@@ -419,7 +423,7 @@ Drop.prototype.step = function(result, input) {
 
 function drop(n, coll) {
   if(coll) {
-    return seq(drop(n), coll);
+    return seq(coll, drop(n));
   }
 
   return function(xform) {
@@ -453,11 +457,12 @@ DropWhile.prototype.step = function(result, input) {
   return this.xform.step(result, input);
 };
 
-function dropWhile(f, coll, ctx) {
+function dropWhile(coll, f, ctx) {
+  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
   f = bound(f, ctx);
 
   if(coll) {
-    return seq(dropWhile(f), coll);
+    return seq(coll, dropWhile(f));
   }
 
   return function(xform) {
@@ -552,31 +557,28 @@ function getReducer(coll) {
 
 // building new collections
 
-function array(xform, coll) {
-  if(!coll) {
-    coll = xform;
+function array(coll, xform) {
+  if(!xform) {
     return reduce(coll, push, []);
   }
   return transduce(xform, arrayReducer, [], coll);
 }
 
-function obj(xform, coll) {
-  if(!coll) {
-    coll = xform;
+function obj(coll, xform) {
+  if(!xform) {
     return reduce(coll, merge, {});
   }
   return transduce(xform, objReducer, {}, coll);
 }
 
-function iter(xform, coll) {
-  if(!coll) {
-    coll = xform;
+function iter(coll, xform) {
+  if(!xform) {
     return iterator(coll);
   }
   return new LazyTransformer(xform, coll);
 }
 
-function seq(xform, coll) {
+function seq(coll, xform) {
   if(isArray(coll)) {
     return transduce(xform, arrayReducer, [], coll);
   }
@@ -686,6 +688,7 @@ module.exports = {
   reduce: reduce,
   reducer: reducer,
   Reduced: Reduced,
+  iterator: iterator,
   push: push,
   merge: merge,
   transduce: transduce,
