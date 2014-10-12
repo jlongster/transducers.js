@@ -138,6 +138,7 @@ seq(iterator([1, 2, 3]),
     compose(
       map(x => x + 1),
       filter(x => x % 2 === 0)))
+// -> <Iterator>
 ```
 
 Our transformations are completely blind to the fact that our transformations may or may not be lazy.
