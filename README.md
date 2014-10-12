@@ -73,12 +73,13 @@ var transform = compose(
   take(2)
 );
 ```
-`compose` is a provided function that simply turns `compose(f, g)` into `x => f(g(x))`. You use it to build up transformations.
+
+`compose` is a provided function that simply turns `compose(f, g)` into `x => f(g(x))`. You use it to build up transformations. The above transformation would always run the map and filter **only twice** becaue only two items are needed, and it short-circuits once it gets two items. Again, this is done without lazyness, read more [here](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data).
 
 There are also 2 transducers available for taking collections and "catting" them into the transformation stream:
 
-* `cat` &mdash take collections and forward each item individually, essentially flattening it
-* `mapcat(f)` &mdash same as `cat`, but first apply `f` to each collection
+* `cat` &mdash; take collections and forward each item individually, essentially flattening it
+* `mapcat(f)` &mdash; same as `cat`, but first apply `f` to each collection
 
 Just pass `cat` straight through like so: `compose(filter(x => x.length < 10), cat)`. That would take all arrays with a length less than 10 and flatten them out into a single array.
 
@@ -90,12 +91,12 @@ To use a transformation, we need to know how to iterate over the source data str
 
 For the latter, you need to specify what you want back. The following functions allow you to make a new data structure and possibly apply a transformation:
 
-* `toArray(coll, xform?)` &mdash Turn `coll` into an array, applying the transformation `xform` to each item if provided. The transform is optional in case you want to do something like turn an iterator into an array.
-* `toObj(coll, xform?)` &mdash Turn `coll` into an object if possible, applying the transformation `xform` if provided. When an object is iterated it produces two-element arrays `[key, value]`, and `obj` will turn these back into an object.
-* `toIter(coll, xform?)` &mdash Make an iterator over `coll`, and apply the transformation `xform` to each value if specified. Note that `coll` can just be another iterator. Transformations will be applied lazily.
-* `seq(coll, xform)` &mdash A generalized method that will return the same data type that was passed in as `coll`, with `xform` applied. You will usually use this unless you know you want an array, object, or iterator. If `coll` is an iterator, another iterator will be returned and transformations will be applied lazily.
-* `into(to, xform, from)` &mdash Apply `xform` to each item in `from` and append it to `to`. This has the effect of "pouring" elements into `to`. You will commonly use this when converting one type of object to another.
-* `transduce(coll, xform, reducer, init?)` &mdash Like `reduce`, but apply `xform` to each value before passing to `reducer`. If `init` is not specify it will attempt to get it from `reducer`.
+* `toArray(coll, xform?)` &mdash; Turn `coll` into an array, applying the transformation `xform` to each item if provided. The transform is optional in case you want to do something like turn an iterator into an array.
+* `toObj(coll, xform?)` &mdash; Turn `coll` into an object if possible, applying the transformation `xform` if provided. When an object is iterated it produces two-element arrays `[key, value]`, and `obj` will turn these back into an object.
+* `toIter(coll, xform?)` &mdash; Make an iterator over `coll`, and apply the transformation `xform` to each value if specified. Note that `coll` can just be another iterator. Transformations will be applied lazily.
+* `seq(coll, xform)` &mdash; A generalized method that will return the same data type that was passed in as `coll`, with `xform` applied. You will usually use this unless you know you want an array, object, or iterator. If `coll` is an iterator, another iterator will be returned and transformations will be applied lazily.
+* `into(to, xform, from)` &mdash; Apply `xform` to each item in `from` and append it to `to`. This has the effect of "pouring" elements into `to`. You will commonly use this when converting one type of object to another.
+* `transduce(coll, xform, reducer, init?)` &mdash; Like `reduce`, but apply `xform` to each value before passing to `reducer`. If `init` is not specify it will attempt to get it from `reducer`.
 
 The possibilities are endless:
 
@@ -129,8 +130,8 @@ iter.next().value; // -> 6
 
 This library provides a few small utility functions:
 
-* `iterator(coll)` &mdash Get an iterator for `coll`, which can be any type like array, object, iterator, or custom data type
-* `range(n)` &mdash Make an array of size `n` filled with numbers from `0...n`.
+* `iterator(coll)` &mdash; Get an iterator for `coll`, which can be any type like array, object, iterator, or custom data type
+* `range(n)` &mdash; Make an array of size `n` filled with numbers from `0...n`.
 
 ## immutable-js
 
