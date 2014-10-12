@@ -241,26 +241,15 @@ Map.prototype.step = function(res, input) {
   return this.xform.step(res, this.f(input));
 };
 
-function map(f, coll, ctx) {
-  //if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
-  //var f2 = ctx ? bound(f, ctx) : f;
+function map(coll, f, ctx) {
+  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
   f = bound(f, ctx);
 
   if(coll) {
     if(isArray(coll)) {
       return arrayMap(f, coll, ctx);
     }
-
-    var reducer = getReducer(coll);
-    var result = reducer.init();
-
-    var iter = iterator(coll);
-    var cur = iter.next();
-    while(!cur.done) {
-      result = reducer.step(result, f(cur.value));
-      cur = iter.next();
-    }
-    return result;
+    return seq(map(f), coll);
   }
 
   return function(xform) {
@@ -295,19 +284,7 @@ function filter(f, coll, ctx) {
     if(isArray(coll)) {
       return arrayFilter(f, coll, ctx);
     }
-
-    var reducer = getReducer(coll);
-    var result = reducer.init();
-
-    var iter = iterator(coll);
-    var cur = iter.next();
-    while(!cur.done) {
-      if(f(cur.value)) {
-        result = reducer.step(result, cur.value);
-      }
-      cur = iter.next();
-    }
-    return result;
+    return seq(filter(f), coll);
   }
 
   return function(xform) {
@@ -325,196 +302,166 @@ function keep(f, coll, ctx) {
   return filter(function(x) { return x != null }, coll);
 }
 
+function Dedupe(xform) {
+  this.xform = xform;
+  this.last = undefined;
+}
+
+Dedupe.prototype.init = function() {
+  return this.xform.init();
+};
+
+Dedupe.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+Dedupe.prototype.step = function(result, input) {
+  if(input !== this.last) {
+    this.last = input;
+    return this.xform.step(result, input);
+  }
+  return result;
+};
+
 function dedupe(coll) {
   if(coll) {
-    var reducer = getReducer(coll);
-    var result = reducer.init();
-    var append = reducer.step;
-
-    var last;
-    var iter = iterator(coll);
-    var cur = iter.next();
-    while(!cur.done) {
-      if(cur.value !== last) {
-        result = append(result, cur.value);
-      }
-      cur = iter.next();
-    }
-    return result;
+    return seq(dedupe(), coll);
   }
 
-  return function(r) {
-    var last;
-    return {
-      init: function() {
-        return r.init();
-      },
-      result: function(v) {
-        return r.result(v);
-      },
-      step: function(result, input) {
-        if(input !== last) {
-          last = input;
-          r.step(result, input);
-        }
-        return result;
-      }
-    };
+  return function(xform) {
+    return new Dedupe(xform);
   }
 }
+
+function TakeWhile(f, xform) {
+  this.xform = xform;
+  this.f = f;
+}
+
+TakeWhile.prototype.init = function() {
+  return this.xform.init();
+};
+
+TakeWhile.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+TakeWhile.prototype.step = function(result, input) {
+  if(this.f(input)) {
+    return this.xform.step(result, input);
+  }
+  return new Reduced(result);
+};
 
 function takeWhile(f, coll, ctx) {
   f = bound(f, ctx);
 
   if(coll) {
-    var reducer = getReducer(coll);
-    var result = reducer.init();
-
-    var iter = iterator(coll);
-    var cur = iter.next();
-    while(!cur.done) {
-      if(f(cur.value)) {
-        result = reducer.step(result, cur.value);
-      }
-      else {
-        break;
-      }
-      cur = iter.next();
-    }
-    return result;
+    return seq(takeWhile(f), coll);
   }
 
-  return function(r) {
-    return {
-      init: function() {
-        return r.init();
-      },
-      result: function(v) {
-        return r.result(v);
-      },
-      step: function(result, input) {
-        if(f(input)) {
-          return r.step(result, input);
-        }
-        return new Reduced(result);
-      }
-    };
+  return function(xform) {
+    return new TakeWhile(f, xform);
   }
 }
+
+function Take(n, xform) {
+  this.n = n;
+  this.i = 0;
+  this.xform = xform;
+}
+
+Take.prototype.init = function() {
+  return this.xform.init();
+};
+
+Take.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+Take.prototype.step = function(result, input) {
+  if(this.i++ < this.n) {
+    return this.xform.step(result, input);
+  }
+  return new Reduced(result);
+};
 
 function take(n, coll) {
   if(coll) {
-    var reducer = getReducer(coll);
-    var result = reducer.init();
-
-    var index = 0;
-    var iter = iterator(coll);
-    var cur = iter.next();
-    while(index++ < n && !cur.done) {
-      result = reducer.step(result, cur.value);
-      cur = iter.next();
-    }
-    return result;
+    return seq(take(n), coll);
   }
 
-  return function(r) {
-    var i = 0;
-    return {
-      init: function() {
-        return r.init();
-      },
-      result: function(v) {
-        return r.result(v);
-      },
-      step: function(result, input) {
-        if(i++ < n) {
-          return r.step(result, input);
-        }
-        return new Reduced(result);
-      }
-    };
+  return function(xform) {
+    return new Take(n, xform);
   }
 }
+
+function Drop(n, xform) {
+  this.n = n;
+  this.i = 0;
+  this.xform = xform;
+}
+
+Drop.prototype.init = function() {
+  return this.xform.init();
+};
+
+Drop.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+Drop.prototype.step = function(result, input) {
+  if(this.i++ < this.n) {
+    return result;
+  }
+  return this.xform.step(result, input);
+};
 
 function drop(n, coll) {
   if(coll) {
-    var reducer = getReducer(coll);
-    var result = reducer.init();
-
-    var index = 0;
-    var iter = iterator(coll);
-    var cur = iter.next();
-    while(!cur.done) {
-      if(++index > n) {
-        result = reducer.step(result, cur.value);
-      }
-      cur = iter.next();
-    }
-    return result;
+    return seq(drop(n), coll);
   }
 
-  return function(r) {
-    var i = 0;
-    return {
-      init: function() {
-        return r.init();
-      },
-      result: function(v) {
-        return r.result(v);
-      },
-      step: function(result, input) {
-        if((i++) + 1 > n) {
-          return r.step(result, input);
-        }
-        return result;
-      }
-    };
+  return function(xform) {
+    return new Drop(n, xform);
   }
 }
+
+function DropWhile(f, xform) {
+  this.xform = xform;
+  this.f = f;
+  this.dropping = true;
+}
+
+DropWhile.prototype.init = function() {
+  return this.xform.init();
+};
+
+DropWhile.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+DropWhile.prototype.step = function(result, input) {
+  if(this.dropping) {
+    if(this.f(input)) {
+      return result;
+    }
+    else {
+      this.dropping = false;
+    }
+  }
+  return this.xform.step(result, input);
+};
 
 function dropWhile(f, coll, ctx) {
   f = bound(f, ctx);
 
   if(coll) {
-    var reducer = getReducer(coll);
-    var result = reducer.init();
-
-    var dropping = true;
-    var iter = iterator(coll);
-    var cur = iter.next();
-    while(!cur.done) {
-      if(dropping && f(cur.value)) {
-        cur = iter.next();
-        continue;
-      }
-      dropping = false;
-      result = reducer.step(result, cur.value);
-      cur = iter.next();
-    }
-    return result;
+    return seq(dropWhile(f), coll);
   }
 
-  return function(r) {
-    var dropping = true;
-    return {
-      init: function() {
-        return r.init();
-      },
-      result: function(v) {
-        return r.result(v);
-      },
-      step: function(result, input, i) {
-        if(dropping) {
-          if(f(input)) {
-            return result;
-          }
-          else {
-            dropping = false;
-          }
-        }
-        return r.step(result, input);
-      }
-    };
+  return function(xform) {
+    return new DropWhile(f, xform);
   }
 }
 
