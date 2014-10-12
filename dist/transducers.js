@@ -50,67 +50,98 @@ var transducers =
 
 	var symbolExists = typeof Symbol !== 'undefined';
 
+	var protocols = {
+	  iterator: symbolExists ? Symbol.iterator : '@@iterator',
+	  reducer: symbolExists ? Symbol('reducer') : '@@reducer'
+	};
+
 	function throwProtocolError(name, coll) {
 	  throw new Error("don't know how to " + name + " collection: " +
 	                  coll);
 	}
 
-	function fullfillsProtocols(obj /* names ... */) {
-	  var names = Array.prototype.slice.call(arguments, 1);
-	  return names.reduce(function(result, name) {
-	    if(symbolExists) {
-	      if(name === 'iterator') {
-	        // Accept ill-formed iterators that don'y conform to the
-	        // protocol by accepting just next()
-	        return result && (obj[Symbol.iterator] || obj.next);
-	      }
-	      return result && obj[Symbol.for(name)];
-	    }
-	    else {
-	      if(name === 'iterator') {
-	        // Accept ill-formed iterators that don't conform to the
-	        // protocol by accepting just next()
-	        return result && (obj['@@iterator'] || obj.next);
-	      }
-	      return result && obj['@@' + name];
-	    }
-	  }, true);
+	function fulfillsProtocol(obj, name) {
+	  if(name === 'iterator') {
+	    // Accept ill-formed iterators that don't conform to the
+	    // protocol by accepting just next()
+	    return obj[protocols.iterator] || obj.next;
+	  }
+
+	  return obj[protocols[name]];
 	}
 
-	function getProtocolMethod(obj, name) {
-	  if(symbolExists) {
-	    if(name === 'iterator') {
-	      return obj[Symbol.iterator];
-	    }
-	    else {
-	      return obj[Symbol.for(name)];
-	    }
-	  }
-	  return obj['@@' + name];
+	function getProtocolProperty(obj, name) {
+	  return obj[protocols[name]];
 	}
 
 	function iterator(coll) {
-	  var iter = getProtocolMethod(coll, 'iterator');
+	  var iter = getProtocolProperty(coll, 'iterator');
 	  if(iter) {
 	    return iter.call(coll);
 	  }
 	  else if(coll.next) {
-	    // Basic duck typing to except an ill-formed iterator that doesn't
+	    // Basic duck typing to accept an ill-formed iterator that doesn't
 	    // conform to the iterator protocol (all iterators should have the
 	    // @@iterator method and return themselves, but some engines don't
 	    // have that on generators like older v8)
 	    return coll;
 	  }
+	  else if(isArray(coll)) {
+	    return new ArrayIterator(coll);
+	  }
+	  else if(isObject(coll)) {
+	    return new ObjectIterator(coll);
+	  }
 	}
+
+	function ArrayIterator(arr) {
+	  this.arr = arr;
+	  this.index = 0;
+	}
+
+	ArrayIterator.prototype.next = function() {
+	  if(this.index < this.arr.length) {
+	    return {
+	      value: this.arr[this.index++],
+	      done: false
+	    };
+	  }
+	  return {
+	    done: true
+	  }
+	};
+
+	function ObjectIterator(obj) {
+	  this.obj = obj;
+	  this.keys = Object.keys(obj);
+	  this.index = 0;
+	}
+
+	ObjectIterator.prototype.next = function() {
+	  if(this.index < this.keys.length) {
+	    var k = this.keys[this.index++];
+	    return {
+	      value: [k, this.obj[k]],
+	      done: false
+	    };
+	  }
+	  return {
+	    done: true
+	  }
+	};
 
 	// helpers
 
 	function isArray(x) {
 	  return x instanceof Array;
 	}
+	var toString = Object.prototype.toString;
+	var isArray = typeof Array.isArray === 'function' ? Array.isArray : function(obj) {
+	  return toString.call(obj) == '[object Array]';
+	};
 
 	function isFunction(x) {
-	  typeof x === 'function';
+	  return typeof x === 'function';
 	}
 
 	function isObject(x) {
@@ -122,102 +153,46 @@ var transducers =
 	  return typeof x === 'number';
 	}
 
-	function range(n) {
-	  var arr = new Array(n);
-	  for(var i=0; i<arr.length; i++) {
-	    arr[i] = i;
-	  }
-	  return arr;
-	}
-
 	function Reduced(val) {
 	  this.val = val;
 	}
 
-	function reduce(coll, f, init) {
+	function reduce(coll, xform, init) {
 	  if(isArray(coll)) {
 	    var result = init;
 	    var index = -1;
 	    var len = coll.length;
 	    while(++index < len) {
-	      result = f(result, coll[index], index);
+	      result = xform.step(result, coll[index]);
 	      if(result instanceof Reduced) {
 	        return result.val;
 	      }
 	    }
-	    return result;
+	    return xform.result(result);
 	  }
-	  else if(isObject(coll)) {
-	    return reduce(Object.keys(coll), function(result, k, i) {
-	      return f(result, [k, coll[k]], i);
-	    }, init);
-	  }
-	  else if(fullfillsProtocols(coll, 'iterator')) {
+	  else if(isObject(coll) || fulfillsProtocol(coll, 'iterator')) {
 	    var result = init;
 	    var iter = iterator(coll);
 	    var val = iter.next();
-	    var i = 0;
 	    while(!val.done) {
-	      result = f(result, val.value, i);
+	      result = xform.step(result, val.value);
 	      if(result instanceof Reduced) {
 	        return result.val;
 	      }
 	      val = iter.next();
-	      i++;
 	    }
-	    return result;
+	    return xform.result(result);
 	  }
-	  throwProtocolError('reduce', coll);
+	  throwProtocolError('iterate', coll);
 	}
 
-	function append(coll, x) {
-	  if(isArray(coll)) {
-	    coll.push(x);
-	    return coll;
+	function transduce(xform, reducer, init, coll) {
+	  xform = xform(reducer);
+	  if(!coll) {
+	    coll = init;
+	    init = xform.init();
 	  }
-	  else if(isObject(coll)) {
-	    if(isObject(x)) {
-	      var keys = Object.keys(x);
-	      for(var i=0; i<keys.length; i++) {
-	        coll[keys[i]] = x[keys[i]];
-	      }
-	      return coll;
-	    }
-	    else if(isArray(x) && x.length === 2) {
-	      coll[x[0]] = x[1];
-	      return coll;
-	    }
-	    throw new Error('cannot append ' + x + ' to object');
-	  }
-	  else if(fullfillsProtocols(coll, 'append')) {
-	    return getProtocolMethod(coll, 'append').call(coll, x);
-	  }
-	  throwProtocolError('append', coll);
-	}
-
-	function empty(coll) {
-	  if(isArray(coll)) {
-	    return [];
-	  }
-	  else if(isObject(coll)) {
-	    return {};
-	  }
-	  else if(fullfillsProtocols(coll, 'empty')) {
-	    return getProtocolMethod(Object.getPrototypeOf(coll), 'empty')()
-	  }
-	  throwProtocolError('make empty', coll);
-	}
-
-	function sequence(xform, coll) {
-	  return transduce(xform, append, empty(coll), coll);
-	}
-
-	function transduce(xform, f, init, coll) {
-	  return reduce(coll, xform(f), init);
-	}
-
-	function into(to, xform, from) {
-	  return transduce(xform, append, to, from);
+	  return reduce(coll, xform, init);
 	}
 
 	function compose() {
@@ -233,278 +208,547 @@ var transducers =
 
 	// transformations
 
-	function map(f, coll) {
-	  if(coll) {
-	    if(isArray(coll)) {
-	      var result = [];
-	      var index = -1;
-	      var len = coll.length;
-	      while(++index < len) {
-	        result.push(f(coll[index], index));
-	      }
-	      return result;
-	    }
-	    else {
-	      var i = 0;
-	      return reduce(coll, function(result, x) {
-	        return append(result, f(x, i++));
-	      }, empty(coll));
-	    }
-	  }
-
-	  return function(r) {
-	    var i = 0;
-	    return function(res, input) {
-	      return r(res, f(input, i++));
-	    }
-	  }
-	}
-
-	function filter(f, coll) {
-	  if(coll) {
-	    if(isArray(coll)) {
-	      var result = [];
-	      var index = -1;
-	      var len = coll.length;
-	      while(++index < len) {
-	        if(f(coll[index], index)) {
-	          result.push(coll[index]);
-	        }
-	      }
-	      return result;
-	    }
-	    else {
-	      var i = 0;
-	      return reduce(coll, function(result, input) {
-	        if(f(input, i++)) {
-	          return append(result, input);
-	        }
-	        return result;
-	      }, empty(coll));
-	    }
-	  }
-
-	  return function(r) {
-	    var i = 0;
-	    return function(res, input) {
-	      if(f(input, i++)) {
-	        return r(res, input);
-	      }
-	      return res;
-	    };
+	function reducer(f) {
+	  return {
+	    init: function() {
+	      throw new Error('init value unavailable');
+	    },
+	    result: function(v) {
+	      return v;
+	    },
+	    step: f
 	  };
 	}
 
-	function remove(f, coll) {
-	  return filter(function(x) { return !f(x); }, coll);
-	}
+	function bound(f, ctx, count) {
+	  count = count != null ? count : 1;
 
-	function keep(f, coll) {
-	  return filter(function(x) { return x != null }, coll);
-	}
-
-	function dedupe(coll) {
-	  var last;
-
-	  if(coll) {
-	    return reduce(
-	      coll,
-	      function(result, input) {
-	        if(input !== last) {
-	          last = input;
-	          return append(result, input);
-	        }
-	        return result;
-	      },
-	      empty(coll)
-	    );
+	  if(!ctx) {
+	    return f;
 	  }
-
-	  return function(r) {
-	    return function(result, input) {
-	      if(input !== last) {
-	        last = input;
-	        r(result, input);
+	  else {
+	    switch(count) {
+	    case 1:
+	      return function(x) {
+	        return f.call(ctx, x);
 	      }
-	      return result;
-	    };
+	    case 2:
+	      return function(x, y) {
+	        return f.call(ctx, x, y);
+	      }
+	    default:
+	      return f.bind(ctx);
+	    }
 	  }
 	}
 
-	function takeWhile(f, coll) {
+	function arrayMap(arr, f, ctx) {
+	  var index = -1;
+	  var length = arr.length;
+	  var result = Array(length);
+	  f = bound(f, ctx, 2);
+
+	  while (++index < length) {
+	    result[index] = f(arr[index], index);
+	  }
+	  return result;
+	}
+
+	function arrayFilter(arr, f, ctx) {
+	  var len = arr.length;
+	  var result = [];
+	  f = bound(f, ctx, 2);
+
+	  for(var i=0; i<len; i++) {
+	    if(f(arr[i], i)) {
+	      result.push(arr[i]);
+	    }
+	  }
+	  return result;
+	}
+
+	function Map(f, xform) {
+	  this.xform = xform;
+	  this.f = f;
+	}
+
+	Map.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	Map.prototype.result = function(v) {
+	  return this.xform.result(v);
+	};
+
+	Map.prototype.step = function(res, input) {
+	  return this.xform.step(res, this.f(input));
+	};
+
+	function map(coll, f, ctx) {
+	  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
+	  f = bound(f, ctx);
+
 	  if(coll) {
 	    if(isArray(coll)) {
-	      var result = [];
-	      var index = -1;
-	      var len = coll.length;
-	      while(++index < len) {
-	        if(f(coll[index])) {
-	          result.push(coll[index]);
-	        }
-	        else {
-	          break;
-	        }
-	      }
-	      return result;
+	      return arrayMap(coll, f, ctx);
 	    }
-	    else {
-	      return reduce(coll, function(result, input) {
-	        if(f(input)) {
-	          return append(result, input);
-	        }
-	        return new Reduced(result);
-	      }, empty(coll));
-	    }
+	    return seq(coll, map(f));
 	  }
 
-	  return function(r) {
-	    return function(result, input) {
-	      if(f(input)) {
-	        return r(result, input);
-	      }
-	      return new Reduced(result);
-	    };
+	  return function(xform) {
+	    return new Map(f, xform);
 	  }
 	}
+
+	function Filter(f, xform) {
+	  this.xform = xform;
+	  this.f = f;
+	}
+
+	Filter.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	Filter.prototype.result = function(v) {
+	  return this.xform.result(v);
+	};
+
+	Filter.prototype.step = function(res, input) {
+	  if(this.f(input)) {
+	    return this.xform.step(res, input);
+	  }
+	  return res;
+	};
+
+	function filter(coll, f, ctx) {
+	  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
+	  f = bound(f, ctx);
+
+	  if(coll) {
+	    if(isArray(coll)) {
+	      return arrayFilter(coll, f, ctx);
+	    }
+	    return seq(coll, filter(f));
+	  }
+
+	  return function(xform) {
+	    return new Filter(f, xform);
+	  };
+	}
+
+	function remove(coll, f, ctx) {
+	  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
+	  f = bound(f, ctx);
+	  return filter(coll, function(x) { return !f(x); });
+	}
+
+	function keep(coll, f, ctx) {
+	  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
+	  f = bound(f, ctx);
+	  return filter(coll, function(x) { return x != null });
+	}
+
+	function Dedupe(xform) {
+	  this.xform = xform;
+	  this.last = undefined;
+	}
+
+	Dedupe.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	Dedupe.prototype.result = function(v) {
+	  return this.xform.result(v);
+	};
+
+	Dedupe.prototype.step = function(result, input) {
+	  if(input !== this.last) {
+	    this.last = input;
+	    return this.xform.step(result, input);
+	  }
+	  return result;
+	};
+
+	function dedupe(coll) {
+	  if(coll) {
+	    return seq(coll, dedupe());
+	  }
+
+	  return function(xform) {
+	    return new Dedupe(xform);
+	  }
+	}
+
+	function TakeWhile(f, xform) {
+	  this.xform = xform;
+	  this.f = f;
+	}
+
+	TakeWhile.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	TakeWhile.prototype.result = function(v) {
+	  return this.xform.result(v);
+	};
+
+	TakeWhile.prototype.step = function(result, input) {
+	  if(this.f(input)) {
+	    return this.xform.step(result, input);
+	  }
+	  return new Reduced(result);
+	};
+
+	function takeWhile(coll, f, ctx) {
+	  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
+	  f = bound(f, ctx);
+
+	  if(coll) {
+	    return seq(coll, takeWhile(f));
+	  }
+
+	  return function(xform) {
+	    return new TakeWhile(f, xform);
+	  }
+	}
+
+	function Take(n, xform) {
+	  this.n = n;
+	  this.i = 0;
+	  this.xform = xform;
+	}
+
+	Take.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	Take.prototype.result = function(v) {
+	  return this.xform.result(v);
+	};
+
+	Take.prototype.step = function(result, input) {
+	  if(this.i++ < this.n) {
+	    return this.xform.step(result, input);
+	  }
+	  return new Reduced(result);
+	};
 
 	function take(n, coll) {
 	  if(coll) {
-	    if(isArray(coll)) {
-	      var result = [];
-	      var index = -1;
-	      var len = coll.length;
-	      while(++index < n && index < len) {
-	        result.push(coll[index]);
-	      }
-	      return result;
-	    }
-	    else {
-	      var i = 0;
-	      return reduce(coll, function(result, input) {
-	        if(i++ < n) {
-	          return append(result, input);
-	        }
-	        return new Reduced(result);
-	      }, empty(coll));
-	    }
+	    return seq(coll, take(n));
 	  }
 
-	  return function(r) {
-	    var i = 0;
-	    return function(result, input) {
-	      if(i++ < n) {
-	        return r(result, input);
-	      }
-	      return new Reduced(result);
-	    };
+	  return function(xform) {
+	    return new Take(n, xform);
 	  }
 	}
+
+	function Drop(n, xform) {
+	  this.n = n;
+	  this.i = 0;
+	  this.xform = xform;
+	}
+
+	Drop.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	Drop.prototype.result = function(v) {
+	  return this.xform.result(v);
+	};
+
+	Drop.prototype.step = function(result, input) {
+	  if(this.i++ < this.n) {
+	    return result;
+	  }
+	  return this.xform.step(result, input);
+	};
 
 	function drop(n, coll) {
 	  if(coll) {
-	    if(isArray(coll)) {
-	      var result = [];
-	      var index = n - 1;
-	      var len = coll.length;
-	      while(++index < len) {
-	        result.push(coll[index]);
-	      }
-	      return result;
-	    }
-	    else {
-	      var i = 0;
-	      return reduce(coll, function(result, input) {
-	        if((i++) + 1 > n) {
-	          return append(result, input);
-	        }
-	        return result;
-	      }, empty(coll));
-	    }
+	    return seq(coll, drop(n));
 	  }
 
-	  return function(r) {
-	    var i = 0;
-	    return function(result, input) {
-	      if((i++) + 1 > n) {
-	        return r(result, input);
-	      }
-	      return result;
-	    };
+	  return function(xform) {
+	    return new Drop(n, xform);
 	  }
 	}
 
-	function dropWhile(f, coll) {
+	function DropWhile(f, xform) {
+	  this.xform = xform;
+	  this.f = f;
+	  this.dropping = true;
+	}
+
+	DropWhile.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	DropWhile.prototype.result = function(v) {
+	  return this.xform.result(v);
+	};
+
+	DropWhile.prototype.step = function(result, input) {
+	  if(this.dropping) {
+	    if(this.f(input)) {
+	      return result;
+	    }
+	    else {
+	      this.dropping = false;
+	    }
+	  }
+	  return this.xform.step(result, input);
+	};
+
+	function dropWhile(coll, f, ctx) {
+	  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
+	  f = bound(f, ctx);
+
 	  if(coll) {
-	    if(isArray(coll)) {
-	      var result = [];
-	      var index = -1;
-	      var len = coll.length;
-	      var dropping = true;
-	      while(++index < len) {
-	        if(dropping) {
-	          if(f(coll[index])) {
-	            continue;
-	          }
-	          else {
-	            dropping = false;
-	          }
-	        }
-
-	        result.push(coll[index]);
-	      }
-	      return result;
-	    }
-	    else {
-	      var dropping = true;
-	      return reduce(coll, function(result, input, i) {
-	        if(dropping) {
-	          if(f(input)) {
-	            return result;
-	          }
-	          else {
-	            dropping = false;
-	          }
-	        }
-	        return append(result, input);
-	      }, empty(coll));
-	    }
+	    return seq(coll, dropWhile(f));
 	  }
 
-	  return function(r) {
-	    var dropping = true;
-	    return function(result, input, i) {
-	      if(dropping) {
-	        if(f(input)) {
-	          return result;
-	        }
-	        else {
-	          dropping = false;
-	        }
-	      }
-	      return r(result, input);
-	    };
+	  return function(xform) {
+	    return new DropWhile(f, xform);
 	  }
 	}
 
-	// pure transducers (doesn't take collections)
+	// pure transducers (cannot take collections)
 
-	function cat(r) {
-	  return function(result, input) {
-	    return reduce(input, r, result);
-	  }
+	function Cat(xform) {
+	  this.xform = xform;
 	}
 
-	function mapcat(f) {
+	Cat.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	Cat.prototype.result = function(v) {
+	  return this.xform.result(v);
+	};
+
+	Cat.prototype.step = function(result, input) {
+	  var xform = this.xform;
+	  var newxform = {
+	    init: function() {
+	      return xform.init();
+	    },
+	    result: function(v) {
+	      return v;
+	    },
+	    step: function(result, input) {
+	      var val = xform.step(result, input);
+	      return (val instanceof Reduced) ? new Reduced(val) : val;
+	    }
+	  }
+
+	  return reduce(input, newxform, result);
+	};
+
+	function cat(xform) {
+	  return new Cat(xform);
+	}
+
+	function mapcat(f, ctx) {
+	  f = bound(f, ctx);
 	  return compose(map(f), cat);
 	}
 
+	// collection helpers
+
+	function push(arr, x) {
+	  arr.push(x);
+	  return arr;
+	}
+
+	function merge(obj, x) {
+	  if(isArray(x) && x.length === 2) {
+	    obj[x[0]] = x[1];
+	  }
+	  else {
+	    var keys = Object.keys(x);
+	    var len = keys.length;
+	    for(var i=0; i<len; i++) {
+	      obj[keys[i]] = x[keys[i]];
+	    }
+	  }
+	  return obj;
+	}
+
+	var arrayReducer = {
+	  init: function() {
+	    return [];
+	  },
+	  result: function(v) {
+	    return v;
+	  },
+	  step: push
+	}
+
+	var objReducer = {
+	  init: function() {
+	    return {};
+	  },
+	  result: function(v) {
+	    return v;
+	  },
+	  step: merge
+	};
+
+	function getReducer(coll) {
+	  if(isArray(coll)) {
+	    return arrayReducer;
+	  }
+	  else if(isObject(coll)) {
+	    return objReducer;
+	  }
+	  else if(fulfillsProtocol(coll, 'reducer')) {
+	    return getProtocolProperty(coll, 'reducer');
+	  }
+	  throwProtocolError('getReducer', coll);
+	}
+
+	// building new collections
+
+	function array(coll, xform) {
+	  if(!xform) {
+	    return reduce(coll, arrayReducer, []);
+	  }
+	  return transduce(xform, arrayReducer, [], coll);
+	}
+
+	function obj(coll, xform) {
+	  if(!xform) {
+	    return reduce(coll, objReducer, {});
+	  }
+	  return transduce(xform, objReducer, {}, coll);
+	}
+
+	function iter(coll, xform) {
+	  if(!xform) {
+	    return iterator(coll);
+	  }
+	  return new LazyTransformer(xform, coll);
+	}
+
+	function seq(coll, xform) {
+	  if(isArray(coll)) {
+	    return transduce(xform, arrayReducer, [], coll);
+	  }
+	  else if(isObject(coll)) {
+	    return transduce(xform, objReducer, {}, coll);
+	  }
+	  else if(fulfillsProtocol(coll, 'reducer')) {
+	    var reducer = getProtocolProperty(coll, 'reducer');
+	    return transduce(xform, reducer, reducer.init(), coll);
+	  }
+	  else if(fulfillsProtocol(coll, 'iterator')) {
+	    return new LazyTransformer(xform, coll);
+	  }
+	  throwProtocolError('sequence', coll);
+	}
+
+	function into(to, xform, from) {
+	  if(isArray(to)) {
+	    return transduce(xform, arrayReducer, to, from);
+	  }
+	  else if(isObject(to)) {
+	    return transduce(xform, objReducer, to, from);
+	  }
+	  else if(fulfillsProtocol(to, 'reducer')) {
+	    return transduce(xform,
+	                     getProtocolProperty(to, 'reducer'),
+	                     to,
+	                     from);
+	  }
+	  throwProtocolError('into', to);
+	}
+
+	// laziness
+
+	var stepper = {
+	  result: function(v) {
+	    return (v instanceof Reduced) ? v.val : v;
+	  },
+	  step: function(lt, x) {
+	    lt.items.push(x);
+	    return lt.rest;
+	  }
+	}
+
+	function Stepper(xform, iter) {
+	  this.xform = xform(stepper);
+	  this.iter = iter;
+	}
+
+	Stepper.prototype.step = function(lt) {
+	  var len = lt.items.length;
+	  while(lt.items.length === len) {
+	    var n = this.iter.next();
+	    if(n.done || n.value instanceof Reduced) {
+	      // finalize
+	      this.xform.result(this);
+	      break;
+	    }
+
+	    // step
+	    this.xform.step(lt, n.value);
+	  }
+	}
+
+	function LazyTransformer(xform, coll) {
+	  this.iter = iterator(coll);
+	  this.items = [];
+	  this.stepper = new Stepper(xform, iterator(coll));
+	}
+
+	LazyTransformer.prototype['@@iterator'] = function() {
+	  return this;
+	}
+
+	LazyTransformer.prototype.next = function() {
+	  this.step();
+
+	  if(this.items.length) {
+	    return {
+	      value: this.items.pop(),
+	      done: false
+	    }
+	  }
+	  else {
+	    return { done: true };
+	  }
+	};
+
+	LazyTransformer.prototype.step = function() {
+	  if(!this.items.length) {
+	    this.stepper.step(this);
+	  }
+	}
+
+	// util
+
+	function range(n) {
+	  var arr = new Array(n);
+	  for(var i=0; i<arr.length; i++) {
+	    arr[i] = i;
+	  }
+	  return arr;
+	}
+
+
 	module.exports = {
 	  reduce: reduce,
+	  reducer: reducer,
 	  Reduced: Reduced,
-	  append: append,
-	  empty: empty,
+	  iterator: iterator,
+	  push: push,
+	  merge: merge,
 	  transduce: transduce,
-	  sequence: sequence,
+	  seq: seq,
+	  array: array,
+	  obj: obj,
+	  iter: iter,
 	  into: into,
 	  compose: compose,
 	  map: map,
@@ -517,7 +761,11 @@ var transducers =
 	  take: take,
 	  takeWhile: takeWhile,
 	  drop: drop,
-	  dropWhile: dropWhile
+	  dropWhile: dropWhile,
+	  range: range,
+
+	  protocols: protocols,
+	  LazyTransformer: LazyTransformer
 	};
 
 

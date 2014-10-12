@@ -1,7 +1,7 @@
 var expect = require('expect.js');
 var Immutable = require('immutable');
 var t = require('../transducers');
-var { reduce, reducer, array, obj, iter, iterate, push, merge, empty,
+var { reduce, reducer, toArray, toObj, toIter, iterate, push, merge, empty,
       transduce, seq, into, compose, map, filter, remove,
       cat, mapcat, keep, dedupe, take, takeWhile,
       drop, dropWhile, protocols } = t;
@@ -81,10 +81,10 @@ describe('', () => {
     immutEql(map(Immutable.Vector(1, 2, 3, 4), x => x + 1),
              Immutable.Vector(2, 3, 4, 5));
 
-    eql(transduce(map(x => x * 2),
+    eql(transduce([1, 2, 3],
+                  map(x => x * 2),
                   reducer(add),
-                  0,
-                  [1, 2, 3]),
+                  0),
         12);
   });
 
@@ -101,10 +101,10 @@ describe('', () => {
     immutEql(filter(Immutable.Vector(1, 2, 3, 4), x => x % 2 === 0),
              Immutable.Vector(2, 4));
 
-    eql(transduce(filter(x => x % 2 === 0),
+    eql(transduce([1, 2, 3],
+                  filter(x => x % 2 === 0),
                   reducer(add),
-                  0,
-                  [1, 2, 3]),
+                  0),
         2);
   });
 
@@ -119,10 +119,10 @@ describe('', () => {
     immutEql(remove(Immutable.Vector(1, 2, 3, 4), x => x % 2 === 0),
              Immutable.Vector(1, 3));
 
-    eql(transduce(remove(x => x % 2 ===0),
+    eql(transduce([1, 2, 3],
+                  remove(x => x % 2 ===0),
                   reducer(add),
-                  0,
-                  [1, 2, 3]),
+                  0),
         4);
   });
 
@@ -137,10 +137,10 @@ describe('', () => {
   });
 
   it('take should work', () => {
-    eql(take(2, [1, 2, 3, 4]), [1, 2])
-    eql(take(10, [1, 2, 3, 4]), [1, 2, 3, 4])
+    eql(take([1, 2, 3, 4], 2), [1, 2])
+    eql(take([1, 2, 3, 4], 10), [1, 2, 3, 4])
 
-    immutEql(take(2, Immutable.Vector(1, 2, 3, 4)),
+    immutEql(take(Immutable.Vector(1, 2, 3, 4), 2),
              Immutable.Vector(1, 2))
 
     eql(into([], take(2), [1, 2, 3, 4]),
@@ -167,10 +167,10 @@ describe('', () => {
   });
 
   it('drop should work', () => {
-    eql(drop(2, [1, 2, 3, 4]), [3, 4])
-    eql(drop(10, [1, 2, 3, 4]), [])
+    eql(drop([1, 2, 3, 4], 2), [3, 4])
+    eql(drop([1, 2, 3, 4], 10), [])
 
-    immutEql(drop(2, Immutable.Vector(1, 2, 3, 4)),
+    immutEql(drop(Immutable.Vector(1, 2, 3, 4), 2),
              Immutable.Vector(3, 4))
 
     eql(into([], drop(2), [1, 2, 3, 4]),
@@ -250,41 +250,41 @@ describe('', () => {
   });
 
   it('transduce and compose should work', () => {
-    eql(transduce(compose(
+    eql(transduce([1, 2, 3, 4],
+                  compose(
                     map(x => x + 1),
                     filter(x => x % 2 === 0)
                   ),
                   reducer(push),
-                  [],
-                  [1, 2, 3, 4]),
+                  []),
         [2, 4])
 
-    eql(transduce(compose(
+    eql(transduce({ x: 1, y: 2 },
+                  compose(
                     map(second),
                     map(x => x + 1)
                   ),
                   reducer(push),
-                  [],
-                  { x: 1, y: 2 }),
+                  []),
         [2, 3])
 
-    eql(transduce(compose(
+    eql(transduce({ x: 1, y: 2 },
+                  compose(
                     map(second),
                     map(x => x + 1),
                     map(x => ['foo' + x, x])
                   ),
                   reducer(merge),
-                  {},
-                  { x: 1, y: 2 }),
+                  {}),
         { foo2: 2, foo3: 3 })
 
-    immutEql(transduce(compose(
+    immutEql(transduce(Immutable.Vector(1, 2, 3, 4),
+                       compose(
                          map(x => x + 1),
                          filter(x => x % 2 === 0)
                        ),
                        Immutable.Vector.prototype[protocols.reducer],
-                       Immutable.Vector(),
-                       Immutable.Vector(1, 2, 3, 4)),
+                       Immutable.Vector()),
              Immutable.Vector(2, 4));
 
     eql(into([], compose(map(x => [x, x * 2]),
@@ -305,17 +305,17 @@ describe('', () => {
       },
     };
 
-    eql(array([1, 2, 3]), [1, 2, 3]);
-    eql(array([1, 2, 3, 4], take(3)),
+    eql(toArray([1, 2, 3]), [1, 2, 3]);
+    eql(toArray([1, 2, 3, 4], take(3)),
         [1, 2, 3]);
-    eql(array(nums, take(6)),
+    eql(toArray(nums, take(6)),
         [0, 1, 2, 3, 4, 5]);
   });
 
   it('obj should work', function() {
-    eql(obj([['foo', 1], ['bar', 2]]),
+    eql(toObj([['foo', 1], ['bar', 2]]),
         { foo: 1, bar: 2 });
-    eql(obj({ foo: 1, bar: 2 }, map(kv => [kv[0], kv[1] + 1])),
+    eql(toObj({ foo: 1, bar: 2 }, map(kv => [kv[0], kv[1] + 1])),
         { foo: 2, bar: 3 });
   });
 
@@ -330,9 +330,9 @@ describe('', () => {
       },
     };
 
-    var lt = iter(nums, map(x => x * 2));
+    var lt = toIter(nums, map(x => x * 2));
     expect(lt instanceof t.LazyTransformer).to.be.ok();
-    expect(array(lt, take(5)),
+    expect(toArray(lt, take(5)),
            [0, 2, 4, 6, 8]);
   });
 });

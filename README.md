@@ -1,7 +1,9 @@
 
 # transducers.js
 
-A small library for generalized transformation of data. This provides a small amount a transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. Read more in [this post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data). See the [TODO list](https://github.com/jlongster/transducers.js#todo). *This is early work and should not be used in production yet*.
+A small library for generalized transformation of data. This provides a bunch of transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. Read more in [this post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data).
+
+The algorithm behind this, explained in the above post, not only allows for it to work with any data structure (arrays, objects, iterators, immutable data structures, you name it) but it also provides better performance than other alternatives such as underscore or lodash. This is because there are no intermediate collections.
 
 ```
 npm install transducers.js
@@ -11,48 +13,157 @@ For browsers, grab the file `dist/transducers.js`.
 
 When writing programs, we frequently write methods that take in collections, do something with them, and return a result. The problem is that we frequently only write these functions to work a specific data structure, so if we ever change our data type or wanted to reuse that functionality, you can't. We need to decouple these kinds of concerns.
 
-A transducer is just a reducing function that transforms the value in some way. A reducing function has the form `function(result, input) {}` and returns a new result. If we express our transformations as these functions, we can easily compose them together without any knowledge of the source or destination result. [Read the introduction blog post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data) for much more thorough explanation.
-
-Available transformations:
-
-* `map(f, coll?)`
-* `filter(f, coll?)`
-* `remove(f, coll?)`
-* `keep(f, coll?)`
-* `dedupe(coll?)`
-* `take(n, coll?)`
-* `takeWhile(f, coll?)`
-* `drop(n, coll?)`
-* `dropWhile(f, coll?)`
-* `cat`
-* `mapcat(f)`
-
-Most of these transformations optionally takes a collection, and it will immediately run the transformation over it. These are highly optimized for builtin data types so if you pass an array in `map` it literally just runs a `while` loop and calls your function on each value.
-
-If you don't pass a collection, it returns a transducer that you can apply in several ways. You can use `compose` to combine transformations. Here's an example. `sequence` returns a collection of the same type with the transformations applied to each value:
+A transducer is a function that takes a reducing function and returns a new one. It can perform the necessary work and call the original reducing function to move on to the next "step". In this library, a transducer a little more than that (it's actually an object that also supports init and finalizer methods) but generally you don't have to worry about these internal details. Read [my post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data) if you want to learn more about the algorithm.
 
 ```js
-sequence(
-  compose(
-    cat,
-    map(x => x + 1),
-    dedupe(),
-    drop(3)
-  ),
-  [[1, 2], [3, 4], [4, 5]]
-)
-// -> [ 5, 6 ]
+var transform = compose(
+  map(x => x * 3),
+  filter(x => x % 2 === 0),
+  take(2)
+);
+
+seq([1, 2, 3, 4, 5], transform);
+// -> [ 6, 12 ]
+
+function* nums() {
+  var i = 1;
+  while(true) {
+    yield i++;
+  }
+}
+
+into([], transform, nums());
+// -> [ 6, 12 ]
+
+into([], transform, Immutable.Vector(1, 2, 3, 4, 5))
+// -> [ 6, 12 ]
 ```
 
-## Applying Transducers
+All of these work with arrays, objects, and any iterable data structure (like [immutable-js](https://github.com/facebook/immutable-js)) and you get all the high performance guarantees for free. The above code always only performs 2 transformations because of `take(2)`, no matter how large the array. This is done without laziness or any overhead of intermediate structures.
 
-Use transducers with the following functions:
+## Transformations
 
-* `sequence(xform, coll)` - get a collection of the same type and fill it with the results of applying `xform` over each item in `coll`
-* `transduce(xform, f, init, coll)` - reduce a collection starting with the initial value `init`, applying `xform` to each value and running the reducing function `f`
-* `into(to, xform, from)` - apply xform to each value in the collection `from` and append it to the collection `to`
+The following transformations are available, and there are more to come (like `partition`).
 
-Additionally, a CSP channel from [js-csp](https://github.com/jlongster/js-csp) can take a transducer: `chan(1, xform)`. You can apply the exact same transformations over channels (which are basically streams!):
+* `map(coll?, f, ctx?)` &mdash; call `f` on each item
+* `filter(coll?, f, ctx?)` &mdash; only include the items where the result of calling `f` with the item is truthy
+* `remove(coll?, f, ctx?)` &mdash; only include the items where the result of calling `f` with the item is falsy
+* `keep(coll?)` &mdash; remove all items that are `null` or `undefined`
+* `take(coll?, n)` &mdash; grab only the first `n` items
+* `takeWhile(coll?, f, ctx?)` &mdash; grab only the first items where the result of calling `f` with the item is truthy
+* `drop(coll?, n)` &mdash; drop the first `n` items and only include the rest
+* `dropWhile(coll?, f, ctx?)` &mdash; drop the first items where the result of calling `f` with the item is truthy
+* `dedupe(coll?)` &mdash; remove consecutive duplicates (equality compared with ===)
+
+The above functions optionally take a collection to immediately perform the transformation on, and a context to bind `this` to when calling `f`. That means you can call them in four ways:
+
+* Immediately perform a map: `map([1, 2, 3], x => x + 1)`
+* Same as above but call the function with `this` as `ctx`: `map([1, 2, 3], function(x) { return x + 1; }, ctx)`
+* Make a map transducer: `map(x => x + 1)`
+* Same as above but with `this` as `ctx`: `map(function(x) { return x + 1; }, ctx)`
+
+(I will be using the ES6 fat arrow syntax, but if that's not available just `function` instead)
+
+The signature of running an immediate map is the same familiar one as seen in lodash and underscore, but now you can drop the collection to make a transducer and run multiple transformations with good performance:
+
+```js
+var transform = compose(
+  map(x => x + 1),
+  filter(x => x % 2 === 0),
+  take(2)
+);
+```
+`compose` is a provided function that simply turns `compose(f, g)` into `x => f(g(x))`. You use it to build up transformations.
+
+There are also 2 transducers available for taking collections and "catting" them into the transformation stream:
+
+* `cat` &mdash take collections and forward each item individually, essentially flattening it
+* `mapcat(f)` &mdash same as `cat`, but first apply `f` to each collection
+
+Just pass `cat` straight through like so: `compose(filter(x => x.length < 10), cat)`. That would take all arrays with a length less than 10 and flatten them out into a single array.
+
+## Applying Transformations
+
+Building data structure-agnostic transformations is cool, but how do you actually use them? `transducers.js` provides several integration points.
+
+To use a transformation, we need to know how to iterate over the source data structure and how to build up a new one. The former is easy; we can work with arrays, objects, and anything can uses the ES6 iterator protocol (Maps, Sets, generators, etc). All the the below functions works with them.
+
+For the latter, you need to specify what you want back. The following functions allow you to make a new data structure and possibly apply a transformation:
+
+* `toArray(coll, xform?)` &mdash Turn `coll` into an array, applying the transformation `xform` to each item if provided. The transform is optional in case you want to do something like turn an iterator into an array.
+* `toObj(coll, xform?)` &mdash Turn `coll` into an object if possible, applying the transformation `xform` if provided. When an object is iterated it produces two-element arrays `[key, value]`, and `obj` will turn these back into an object.
+* `toIter(coll, xform?)` &mdash Make an iterator over `coll`, and apply the transformation `xform` to each value if specified. Note that `coll` can just be another iterator. Transformations will be applied lazily.
+* `seq(coll, xform)` &mdash A generalized method that will return the same data type that was passed in as `coll`, with `xform` applied. You will usually use this unless you know you want an array, object, or iterator. If `coll` is an iterator, another iterator will be returned and transformations will be applied lazily.
+* `into(to, xform, from)` &mdash Apply `xform` to each item in `from` and append it to `to`. This has the effect of "pouring" elements into `to`. You will commonly use this when converting one type of object to another.
+* `transduce(coll, xform, reducer, init?)` &mdash Like `reduce`, but apply `xform` to each value before passing to `reducer`. If `init` is not specify it will attempt to get it from `reducer`.
+
+The possibilities are endless:
+
+```js
+// Map an object
+seq({ foo: 1, bar: 2 }, map(kv => [kv[0], kv[1] + 1]));
+// -> { foo: 2, bar: 3 }
+
+// Make an array from an object
+toArray({ foo: 1, bar: 2 });
+// -> [ [ 'foo', 1 ], [ 'bar', 2 ] ]
+
+// Make an array from an iterable
+function* nums() {
+  var i = 1;
+  while(true) {
+    yield i++;
+  }
+}
+into([], take(3), nums());
+// -> [ 1, 2, 3 ]
+
+// Lazily transform an iterable
+var iter = seq(nums(), map(x => x * 2))
+iter.next().value; // -> 2
+iter.next().value; // -> 4
+iter.next().value; // -> 6
+```
+
+## Utility Functions
+
+This library provides a few small utility functions:
+
+* `iterator(coll)` &mdash Get an iterator for `coll`, which can be any type like array, object, iterator, or custom data type
+* `range(n)` &mdash Make an array of size `n` filled with numbers from `0...n`.
+
+## immutable-js
+
+We've talked about how this can be applied to any data structure &mdash; let's see that in action. Here's how you could use this with [immutable-js](https://github.com/facebook/immutable-js).
+
+```js
+Immutable.Vector.from(
+  seq(Immutable.Vector(1, 2, 3, 4, 5),
+      compose(
+        map(function(x) { return x + 10; }),
+        map(function(x) { return x * 2; }),
+        filter(function(x) { return x % 5 === 0; }),
+        filter(function(x) { return x % 2 === 0; })))
+)
+```
+
+We can use our familiar `seq` function because `Immutable.Vector` implements the iterator protocol, so we can iterator over it. Because `seq` is working with an iterator, it returns a new iterator that will *lazily transform each value*. We can simply pass this iterator into `Immutable.Vector.from` to construct a new one, and we have a new transformed immutable vector with no intermediate collections except for one lazy transformer!
+
+In fact, since we are not having to use any intermediate structures, it turns out that this is *faster than immutable-js' transformations themselves*, which are lazy. Lazyness does not help here, since we are eagerly transforming the whole collection. And even if we did something like `take(10)`, we would still beat it because we can still short-circuit without any of the lazy machinery.
+
+Here is the result of running the above code with the builtin transformers against ours (see the [full benchmark](https://github.com/jlongster/transducers.js/blob/master/bench/immut.js)):
+
+```
+% node bench/immut.js
+Immutable map/filter (1000) x 5,497 ops/sec ±2.63% (91 runs sampled)
+transducer map/filter (1000) x 7,309 ops/sec ±0.73% (100 runs sampled)
+Immutable map/filter (100000) x 62.73 ops/sec ±0.85% (67 runs sampled)
+transducer map/filter (100000) x 80.15 ops/sec ±0.48% (71 runs sampled)
+```
+
+## CSP Channels
+
+This not only works with all the JavaScript data structures you can think of, but it even works for things like streams. Soon channels from [js-csp](https://github.com/ubolonton/js-csp) will be able to take a transformation and you get all of this for channels for free:
 
 ```js
 var ch = chan(1, compose(
@@ -61,100 +172,40 @@ var ch = chan(1, compose(
   dedupe(),
   drop(3)
 ));
+```
 
-go(function*() {
-  yield put(ch, [1, 2]);
-  yield put(ch, [3, 4]);
-  yield put(ch, [4, 5]);
-});
+## The `transformer` protocol
 
-go(function*() {
-  while(!ch.closed) {
-    console.log(yield take(ch));
+While it's great that you can apply transducers to custom data structures, it's a bit annoying to always have to use constructor functions like `Immutable.Vector.from`. One option is to define a new protocol complementary to `iterator`. I call it the `transformer` protocol.
+
+To implement the transformer protocol, you add a transformer to the prototype of your data structure. A transformer is an object with three methods: `init`, `result`, and `step`. `init` returns a new empty object, `result`, can perform any finalization steps on the resulting collection, and `step` perform a reduce. Here's what it looks like for `Immutable.Vector`:
+
+```js
+var t = require('./transducers');
+Immutable.Vector.prototype[t.protocols.transformer] = {
+  init: function() {
+    return Immutable.Vector().asMutable();
+  },
+  result: function(vec) {
+    return vec.asImmutable();
+  },
+  step: function(vec, x) {
+    return vec.push(x);
   }
-});
-
-// output: 5, 6
-```
-
-## Iterating and Building
-
-In order to apply a transducer, we need to know two things: how to iterate the collection and how to build up a new collection (assuming we aren't using `transduce` where you can build up anything). Luckily ES6 already gives a protocol for iteration, so anything conforming to that can be iterated over (generators, NodeLists, etc). If you attempt to iterate over an object, transducers.js will automatically convert it into an array of two-dimensional arrays of key/value pairs.
-
-Here's just a few examples:
-
-```js
-var xform = compose(map(x => x * 2),
-                    filter(x => x > 5));
-
-into([], xform, [1, 2, 3, 4]);
-// -> [ 6, 8 ]
-
-into([],
-     map(kv => [kv[0], kv[1] * 2]),
-                 { x: 1, y: 2 });
-// -> [ [ 'x', 2 ], [ 'y', 4 ] ]
-
-function *data() {
-  yield 1;
-  yield 2;
-  yield 3;
-  yield 4;
-}
-
-into([], xform, data());
-// -> [ 6, 8 ]
-
-// assuming div.page and div.article exist:
-into([], map(x => x.className), document.querySelectorAll('div'));
-// -> [ '.page', '.article' ]
-```
-
-In all of those examples, we are collecting the results into an array. So what about building data structures? What if we want an object, or something else back?
-
-If you ask to build up an object, transducers.js will automatically transform an array of two-dimensional array key/value pairs into an object. Unfortunately, there is no existing protocol to make this happen for arbitrary data types like there is for iteration. We have to make our own.
-
-If you are authoring a new data structure, you could provide functions for running transducers and implement that yourself. But we don't really want to force authors to be aware of transducers, and it's healthier for the community if we adopt protocols instead. So I'm proposing two new methods that all data structures can implement: `@@append` and `@@empty`.
-
-* `@@append` - add a new item to the collection
-* `@@empty` - return a newly-allocated empty collection of the same type
-
-With these two methods, we can build up new collections arbitrarily without caring about their actual implementation. They are prefixed with two `at`s because ideally they are ES6 symbols, and that's how we write them in docs. Since symbols aren't implemented everywhere yet, you can just add methods literally called `"@@append"`.
-
-With JavaScript prototypes, you can actually monkeypatch existing libraries quite easily. Let's say we wanted to use [immutable-js](https://github.com/facebook/immutable-js). It already implement the iterator protocol with a method `@@iterator`, but let's add two more:
-
-```js
-Immutable.Vector.prototype['@@append'] = function(x) {
-  return this.push(x);
-};
-
-Immutable.Vector.prototype['@@empty'] = function(x) {
-  return Immutable.Vector();
 };
 ```
 
-Now we can work with `Immutable.Vector` in all of our functions:
+If you implement the transformer protocol, now your data structure will work with *all* of the builtin functions. You can just use `seq` like normal and you get back an immutable vector!
 
+```js
+t.seq(Immutable.Vector(1, 2, 3, 4, 5),
+      t.compose(
+        t.map(function(x) { return x + 10; }),
+        t.map(function(x) { return x * 2; }),
+        t.filter(function(x) { return x % 5 === 0; }),
+        t.filter(function(x) { return x % 2 === 0; })));
+// -> Vector [ 30 ]
 ```
-into(Immutable.Vector(),
-     map(x => x + 1),
-     [1, 2, 3, 4]);
-// -> Immutable.Vector(2, 3, 4, 5)
-
-sequence(compose(
-           map(x => x * 2),
-           filter(x => x > 5)
-         ),
-         Immutable.Vector(1, 2, 3, 4));
-// -> Immutable.Vector(6, 8)
-```
-
-You could do the same thing with ES6 `Set` and `Map` types. Separating concerns provides a powerful way to write programs that can be reused easily.
-
-## TODO
-
-* Possibly remove the "buildable" protocol and always return iterators. This means instead of `sequence(xform, [1, 2, 3])` you'd do `[...sequence(xform, [1, 2, 3])]`. It allows this library to focus purely on transducers. Custom data structures should take an iterator as a constructor so you can build it up.
-* Use the iterator protocol in all of the transducers and implement the high-performance transforms on top of them, instead of hard-coding the builtin array logic
 
 ## Running Tests
 
@@ -163,6 +214,5 @@ npm install
 gulp
 mocha build/tests
 ```
-
 
 [BSD LICENSE](https://github.com/jlongster/transducers.js/blob/master/LICENSE)
