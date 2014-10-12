@@ -42,7 +42,7 @@ function benchArray(n) {
     })
 }
 
-for(var i=1000; i<=51000; i+=10000) {
+for(var i=500; i<=530000; i+=20000) {
   benchArray(i);
 }
 
