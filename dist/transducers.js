@@ -52,7 +52,7 @@ var transducers =
 
 	var protocols = {
 	  iterator: symbolExists ? Symbol.iterator : '@@iterator',
-	  reducer: symbolExists ? Symbol('reducer') : '@@reducer'
+	  transformer: symbolExists ? Symbol('transformer') : '@@transformer'
 	};
 
 	function throwProtocolError(name, coll) {
@@ -186,10 +186,9 @@ var transducers =
 	  throwProtocolError('iterate', coll);
 	}
 
-	function transduce(xform, reducer, init, coll) {
+	function transduce(coll, xform, reducer, init) {
 	  xform = xform(reducer);
-	  if(!coll) {
-	    coll = init;
+	  if(init === undefined) {
 	    init = xform.init();
 	  }
 	  return reduce(coll, xform, init);
@@ -342,9 +341,7 @@ var transducers =
 	  return filter(coll, function(x) { return !f(x); });
 	}
 
-	function keep(coll, f, ctx) {
-	  if(isFunction(coll)) { ctx = f; f = coll; coll = null; }
-	  f = bound(f, ctx);
+	function keep(coll) {
 	  return filter(coll, function(x) { return x != null });
 	}
 
@@ -433,7 +430,9 @@ var transducers =
 	  return new Reduced(result);
 	};
 
-	function take(n, coll) {
+	function take(coll, n) {
+	  if(isNumber(coll)) { n = coll; coll = null }
+
 	  if(coll) {
 	    return seq(coll, take(n));
 	  }
@@ -464,7 +463,9 @@ var transducers =
 	  return this.xform.step(result, input);
 	};
 
-	function drop(n, coll) {
+	function drop(coll, n) {
+	  if(isNumber(coll)) { n = coll; coll = null }
+
 	  if(coll) {
 	    return seq(coll, drop(n));
 	  }
@@ -602,29 +603,29 @@ var transducers =
 	  else if(isObject(coll)) {
 	    return objReducer;
 	  }
-	  else if(fulfillsProtocol(coll, 'reducer')) {
-	    return getProtocolProperty(coll, 'reducer');
+	  else if(fulfillsProtocol(coll, 'transformer')) {
+	    return getProtocolProperty(coll, 'transformer');
 	  }
 	  throwProtocolError('getReducer', coll);
 	}
 
 	// building new collections
 
-	function array(coll, xform) {
+	function toArray(coll, xform) {
 	  if(!xform) {
 	    return reduce(coll, arrayReducer, []);
 	  }
-	  return transduce(xform, arrayReducer, [], coll);
+	  return transduce(coll, xform, arrayReducer, []);
 	}
 
-	function obj(coll, xform) {
+	function toObj(coll, xform) {
 	  if(!xform) {
 	    return reduce(coll, objReducer, {});
 	  }
-	  return transduce(xform, objReducer, {}, coll);
+	  return transduce(coll, xform, objReducer, {});
 	}
 
-	function iter(coll, xform) {
+	function toIter(coll, xform) {
 	  if(!xform) {
 	    return iterator(coll);
 	  }
@@ -633,14 +634,14 @@ var transducers =
 
 	function seq(coll, xform) {
 	  if(isArray(coll)) {
-	    return transduce(xform, arrayReducer, [], coll);
+	    return transduce(coll, xform, arrayReducer, []);
 	  }
 	  else if(isObject(coll)) {
-	    return transduce(xform, objReducer, {}, coll);
+	    return transduce(coll, xform, objReducer, {});
 	  }
-	  else if(fulfillsProtocol(coll, 'reducer')) {
-	    var reducer = getProtocolProperty(coll, 'reducer');
-	    return transduce(xform, reducer, reducer.init(), coll);
+	  else if(fulfillsProtocol(coll, 'transformer')) {
+	    var transformer = getProtocolProperty(coll, 'transformer');
+	    return transduce(coll, xform, transformer, transformer.init());
 	  }
 	  else if(fulfillsProtocol(coll, 'iterator')) {
 	    return new LazyTransformer(xform, coll);
@@ -650,16 +651,16 @@ var transducers =
 
 	function into(to, xform, from) {
 	  if(isArray(to)) {
-	    return transduce(xform, arrayReducer, to, from);
+	    return transduce(from, xform, arrayReducer, to);
 	  }
 	  else if(isObject(to)) {
-	    return transduce(xform, objReducer, to, from);
+	    return transduce(from, xform, objReducer, to);
 	  }
-	  else if(fulfillsProtocol(to, 'reducer')) {
-	    return transduce(xform,
-	                     getProtocolProperty(to, 'reducer'),
-	                     to,
-	                     from);
+	  else if(fulfillsProtocol(to, 'tranformer')) {
+	    return transduce(from,
+	                     xform,
+	                     getProtocolProperty(to, 'transformer'),
+	                     to);
 	  }
 	  throwProtocolError('into', to);
 	}
@@ -746,9 +747,9 @@ var transducers =
 	  merge: merge,
 	  transduce: transduce,
 	  seq: seq,
-	  array: array,
-	  obj: obj,
-	  iter: iter,
+	  toArray: toArray,
+	  toObj: toObj,
+	  toIter: toIter,
 	  into: into,
 	  compose: compose,
 	  map: map,
