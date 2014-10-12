@@ -74,7 +74,7 @@ var transform = compose(
 );
 ```
 
-`compose` is a provided function that simply turns `compose(f, g)` into `x => f(g(x))`. You use it to build up transformations. The above transformation would always run the map and filter **only twice** becaue only two items are needed, and it short-circuits once it gets two items. Again, this is done without lazyness, read more [here](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data).
+`compose` is a provided function that simply turns `compose(f, g)` into `x => f(g(x))`. You use it to build up transformations. The above transformation would always run the map and filter **only twice** becaue only two items are needed, and it short-circuits once it gets two items. Again, this is done without laziness, read more [here](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data).
 
 There are also 2 transducers available for taking collections and "catting" them into the transformation stream:
 
@@ -120,18 +120,36 @@ into([], take(3), nums());
 // -> [ 1, 2, 3 ]
 
 // Lazily transform an iterable
-var iter = seq(nums(), map(x => x * 2))
-iter.next().value; // -> 2
-iter.next().value; // -> 4
+var iter = seq(nums(), compose(map(x => x * 2),
+                               filter(x => x > 4));
 iter.next().value; // -> 6
+iter.next().value; // -> 8
+iter.next().value; // -> 10
 ```
+
+## Laziness
+
+Transducers remove the requirement of being lazy to optimize for things like `take(10)`. However, it can still be useful to "bind" a collection to a set of transformations and pass it around, without actually evaluating the transformations.
+
+As noted above, whenever you apply transformations to an iterator it does so lazily. It's easy convert array transformations into a lazy operation, just use the utility function `iterator` to grab an iterator of the array instead:
+
+```js
+seq(iterator([1, 2, 3]),
+    compose(
+      map(x => x + 1),
+      filter(x => x % 2 === 0)))
+```
+
+Our transformations are completely blind to the fact that our transformations may or may not be lazy.
 
 ## Utility Functions
 
 This library provides a few small utility functions:
 
 * `iterator(coll)` &mdash; Get an iterator for `coll`, which can be any type like array, object, iterator, or custom data type
-* `range(n)` &mdash; Make an array of size `n` filled with numbers from `0...n`.
+* `push(arr, value)` &mdash; Push `value` onto `arr` and return `arr`
+* `merge(obj, value)` &mdash; Merge `value` into `obj`. `value` can be another object or a two-element array of `[key, value]`
+* `range(n)` &mdash; Make an array of size `n` filled with numbers from `0..n`.
 
 ## immutable-js
 
@@ -150,7 +168,7 @@ Immutable.Vector.from(
 
 We can use our familiar `seq` function because `Immutable.Vector` implements the iterator protocol, so we can iterator over it. Because `seq` is working with an iterator, it returns a new iterator that will *lazily transform each value*. We can simply pass this iterator into `Immutable.Vector.from` to construct a new one, and we have a new transformed immutable vector with no intermediate collections except for one lazy transformer!
 
-In fact, since we are not having to use any intermediate structures, it turns out that this is *faster than immutable-js' transformations themselves*, which are lazy. Lazyness does not help here, since we are eagerly transforming the whole collection. And even if we did something like `take(10)`, we would still beat it because we can still short-circuit without any of the lazy machinery.
+In fact, since we are not having to use any intermediate structures, it turns out that this is *faster than immutable-js' transformations themselves*, which are lazy. Laziness does not help here, since we are eagerly transforming the whole collection. And even if we did something like `take(10)`, we would still beat it because we can still short-circuit without any of the lazy machinery.
 
 Here is the result of running the above code with the builtin transformers against ours (see the [full benchmark](https://github.com/jlongster/transducers.js/blob/master/bench/immut.js)):
 

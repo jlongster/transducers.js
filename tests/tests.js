@@ -1,7 +1,7 @@
 var expect = require('expect.js');
 var Immutable = require('immutable');
 var t = require('../transducers');
-var { reduce, reducer, toArray, toObj, toIter, iterate, push, merge, empty,
+var { reduce, transformer, toArray, toObj, toIter, iterate, push, merge, empty,
       transduce, seq, into, compose, map, filter, remove,
       cat, mapcat, keep, dedupe, take, takeWhile,
       drop, dropWhile, protocols } = t;
@@ -22,7 +22,7 @@ function add(x, y) {
   return x + y;
 }
 
-Immutable.Vector.prototype[protocols.reducer] = {
+Immutable.Vector.prototype[protocols.transformer] = {
   init: function() {
     return Immutable.Vector();
   },
@@ -55,13 +55,13 @@ describe('', () => {
         { x: 1, y: 2, z: 3 });
   });
 
-  it('reducer protocol should work', () => {
+  it('transformer protocol should work', () => {
     var vec = Immutable.Vector(1, 2, 3);
-    var reducer = vec[protocols.reducer];
+    var transformer = vec[protocols.transformer];
 
-    immutEql(reducer.init(), Immutable.Vector());
+    immutEql(transformer.init(), Immutable.Vector());
 
-    immutEql(reducer.step(vec, 4),
+    immutEql(transformer.step(vec, 4),
              Immutable.Vector(1, 2, 3, 4));
   });
 
@@ -83,7 +83,7 @@ describe('', () => {
 
     eql(transduce([1, 2, 3],
                   map(x => x * 2),
-                  reducer(add),
+                  transformer(add),
                   0),
         12);
   });
@@ -103,7 +103,7 @@ describe('', () => {
 
     eql(transduce([1, 2, 3],
                   filter(x => x % 2 === 0),
-                  reducer(add),
+                  transformer(add),
                   0),
         2);
   });
@@ -121,7 +121,7 @@ describe('', () => {
 
     eql(transduce([1, 2, 3],
                   remove(x => x % 2 ===0),
-                  reducer(add),
+                  transformer(add),
                   0),
         4);
   });
@@ -255,7 +255,7 @@ describe('', () => {
                     map(x => x + 1),
                     filter(x => x % 2 === 0)
                   ),
-                  reducer(push),
+                  transformer(push),
                   []),
         [2, 4])
 
@@ -264,7 +264,7 @@ describe('', () => {
                     map(second),
                     map(x => x + 1)
                   ),
-                  reducer(push),
+                  transformer(push),
                   []),
         [2, 3])
 
@@ -274,7 +274,7 @@ describe('', () => {
                     map(x => x + 1),
                     map(x => ['foo' + x, x])
                   ),
-                  reducer(merge),
+                  transformer(merge),
                   {}),
         { foo2: 2, foo3: 3 })
 
@@ -283,7 +283,7 @@ describe('', () => {
                          map(x => x + 1),
                          filter(x => x % 2 === 0)
                        ),
-                       Immutable.Vector.prototype[protocols.reducer],
+                       Immutable.Vector.prototype[protocols.transformer],
                        Immutable.Vector()),
              Immutable.Vector(2, 4));
 

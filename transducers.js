@@ -160,7 +160,7 @@ function compose() {
 
 // transformations
 
-function reducer(f) {
+function transformer(f) {
   return {
     init: function() {
       throw new Error('init value unavailable');
@@ -609,7 +609,7 @@ function into(to, xform, from) {
   else if(isObject(to)) {
     return transduce(from, xform, objReducer, to);
   }
-  else if(fulfillsProtocol(to, 'tranformer')) {
+  else if(fulfillsProtocol(to, 'transformer')) {
     return transduce(from,
                      xform,
                      getProtocolProperty(to, 'transformer'),
@@ -656,7 +656,7 @@ function LazyTransformer(xform, coll) {
   this.stepper = new Stepper(xform, iterator(coll));
 }
 
-LazyTransformer.prototype['@@iterator'] = function() {
+LazyTransformer.prototype[protocols.iterator] = function() {
   return this;
 }
 
@@ -693,7 +693,7 @@ function range(n) {
 
 module.exports = {
   reduce: reduce,
-  reducer: reducer,
+  transformer: transformer,
   Reduced: Reduced,
   iterator: iterator,
   push: push,
