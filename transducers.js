@@ -106,50 +106,42 @@ function Reduced(val) {
   this.val = val;
 }
 
-function reduce(coll, f, init) {
+function reduce(coll, xform, init) {
   if(isArray(coll)) {
     var result = init;
     var index = -1;
     var len = coll.length;
     while(++index < len) {
-      result = f(result, coll[index]);
+      result = xform.step(result, coll[index]);
       if(result instanceof Reduced) {
         return result.val;
       }
     }
-    return result;
+    return xform.result(result);
   }
-  else if(fulfillsProtocol(coll, 'iterator')) {
+  else if(isObject(coll) || fulfillsProtocol(coll, 'iterator')) {
     var result = init;
     var iter = iterator(coll);
     var val = iter.next();
     while(!val.done) {
-      result = f(result, val.value);
+      result = xform.step(result, val.value);
       if(result instanceof Reduced) {
         return result.val;
       }
       val = iter.next();
     }
-    return result;
+    return xform.result(result);
   }
-  else if(isObject(coll)) {
-    return reduce(Object.keys(coll), function(result, k) {
-      return f(result, [k, coll[k]]);
-    }, init);
-  }
-  throwProtocolError('reduce', coll);
+  throwProtocolError('iterate', coll);
 }
 
 function transduce(xform, reducer, init, coll) {
-  reducer = xform(reducer);
+  xform = xform(reducer);
   if(!coll) {
     coll = init;
-    init = reducer.init();
+    init = xform.init();
   }
-  var res = reduce(coll, function(res, input) {
-    return reducer.step(res, input);
-  }, init);
-  return reducer.result(res);
+  return reduce(coll, xform, init);
 }
 
 function compose() {
@@ -199,7 +191,7 @@ function bound(f, ctx, count) {
   }
 }
 
-function arrayMap(f, arr, ctx) {
+function arrayMap(arr, f, ctx) {
   var index = -1;
   var length = arr.length;
   var result = Array(length);
@@ -211,7 +203,7 @@ function arrayMap(f, arr, ctx) {
   return result;
 }
 
-function arrayFilter(f, arr, ctx) {
+function arrayFilter(arr, f, ctx) {
   var len = arr.length;
   var result = [];
   f = bound(f, ctx, 2);
@@ -247,7 +239,7 @@ function map(coll, f, ctx) {
 
   if(coll) {
     if(isArray(coll)) {
-      return arrayMap(f, coll, ctx);
+      return arrayMap(coll, f, ctx);
     }
     return seq(coll, map(f));
   }
@@ -283,7 +275,7 @@ function filter(coll, f, ctx) {
 
   if(coll) {
     if(isArray(coll)) {
-      return arrayFilter(f, coll, ctx);
+      return arrayFilter(coll, f, ctx);
     }
     return seq(coll, filter(f));
   }
@@ -486,10 +478,20 @@ Cat.prototype.result = function(v) {
 
 Cat.prototype.step = function(result, input) {
   var xform = this.xform;
+  var newxform = {
+    init: function() {
+      return xform.init();
+    },
+    result: function(v) {
+      return v;
+    },
+    step: function(result, input) {
+      var val = xform.step(result, input);
+      return (val instanceof Reduced) ? new Reduced(val) : val;
+    }
+  }
 
-  return reduce(input, function(res, input) {
-    return xform.step(res, input)
-  }, result);
+  return reduce(input, newxform, result);
 };
 
 function cat(xform) {
@@ -559,14 +561,14 @@ function getReducer(coll) {
 
 function array(coll, xform) {
   if(!xform) {
-    return reduce(coll, push, []);
+    return reduce(coll, arrayReducer, []);
   }
   return transduce(xform, arrayReducer, [], coll);
 }
 
 function obj(coll, xform) {
   if(!xform) {
-    return reduce(coll, merge, {});
+    return reduce(coll, objReducer, {});
   }
   return transduce(xform, objReducer, {}, coll);
 }

@@ -9,6 +9,7 @@ function benchArray(n) {
 
   suite
     .add('_.map/filter (' + n + ')', function() {
+      // not even going to use chaining, it's slower
       _.filter(
         _.filter(
           _.map(
@@ -19,6 +20,7 @@ function benchArray(n) {
       );
     })
     .add('u.map/filter (' + n + ')', function() {
+      // not even going to use chaining, it's slower
       u.filter(
         u.filter(
           u.map(
@@ -27,12 +29,6 @@ function benchArray(n) {
           function(x) { return x % 5 === 0;}),
         function(x) { return x % 2 === 0; }
       );
-    })
-    .add('t.map/filter (' + n + ')', function() {
-      t.filter(function(x) { return x % 2 === 0; },
-               t.filter(function(x) { return x % 5 === 0; },
-                        t.map(function(x) { return x * 2; },
-                              t.map(function(x) { return x + 10; }, arr))));
     })
     .add('t.map/filter+transduce (' + n + ')', function() {
       t.into([],
@@ -43,12 +39,37 @@ function benchArray(n) {
                t.filter(function(x) { return x % 2 === 0; })
              ),
              arr);
-    });
+    })
 }
 
-benchArray(10000);
-benchArray(300000);
+for(var i=1000; i<=51000; i+=10000) {
+  benchArray(i);
+}
+
+var currentData = {};
+function print() {
+  process.stdout.write(currentData.size + ' ');
+  currentData.cols.forEach(function(col, i) {
+    process.stdout.write(col + ' ');
+  });
+  console.log('');
+}
 
 suite.on('cycle', function(event) {
-  console.log(String(event.target));
-}).run();
+  var size = parseInt(event.target.name.match(/\((.*)\)/)[1]);
+  if(currentData.size !== size) {
+    if(currentData.size) {
+      print();
+    }
+    currentData = { size: size,
+                    cols: [] };
+  }
+
+  currentData.cols.push(event.target.hz);
+});
+
+suite.on('complete', function(event) {
+  print();
+});
+
+suite.run();

@@ -47,27 +47,6 @@ function immutEql(src, dest) {
 }
 
 describe('', () => {
-  it('reduce should work', () => {
-    eq(reduce([1, 2, 3, 4],
-              (result, x) => result + x,
-              0),
-       10);
-
-    eql(reduce({ x: 1, y: 2 },
-               (result, x) => {
-                 result[x[0]] = x[1] + 1;
-                 return result;
-               },
-               {}),
-        { x: 2, y: 3 });
-
-    var v = Immutable.Vector(1, 2);
-    eq(reduce(v,
-              (result, x) => result + x,
-              0),
-       3);
-  });
-
   it('push/merge should work', () => {
     eql(push([1, 2, 3], 4), [1, 2, 3, 4]);
     eql(merge({ x: 1, y: 2 }, { z: 3 }),
