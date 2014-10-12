@@ -93,7 +93,7 @@ For the latter, you need to specify what you want back. The following functions 
 
 * `toArray(coll, xform?)` &mdash; Turn `coll` into an array, applying the transformation `xform` to each item if provided. The transform is optional in case you want to do something like turn an iterator into an array.
 * `toObj(coll, xform?)` &mdash; Turn `coll` into an object if possible, applying the transformation `xform` if provided. When an object is iterated it produces two-element arrays `[key, value]`, and `obj` will turn these back into an object.
-* `toIter(coll, xform?)` &mdash; Make an iterator over `coll`, and apply the transformation `xform` to each value if specified. Note that `coll` can just be another iterator. Transformations will be applied lazily.
+* `toIter(coll, xform?)` &mdash; Make an iterator over `coll`, and apply the transformation `xform` to each value if specified. Note that `coll` can just be another iterator. **Transformations will be applied lazily**.
 * `seq(coll, xform)` &mdash; A generalized method that will return the same data type that was passed in as `coll`, with `xform` applied. You will usually use this unless you know you want an array, object, or iterator. If `coll` is an iterator, another iterator will be returned and transformations will be applied lazily.
 * `into(to, xform, from)` &mdash; Apply `xform` to each item in `from` and append it to `to`. This has the effect of "pouring" elements into `to`. You will commonly use this when converting one type of object to another.
 * `transduce(coll, xform, reducer, init?)` &mdash; Like `reduce`, but apply `xform` to each value before passing to `reducer`. If `init` is not specify it will attempt to get it from `reducer`.
