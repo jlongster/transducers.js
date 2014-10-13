@@ -1,8 +1,13 @@
 {
   "name": "transducers.js",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "James Long <longster@gmail.com>",
   "main": "./transducers.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jlongster/transducers.js.git"
+  },
+  "keywords": ["browser", "client", "functional", "util"],
   "devDependencies": {
     "benchmark": "^1.0.0",
     "es6-macros": "0.0.7",

@@ -3,7 +3,7 @@
 
 A small library for generalized transformation of data. This provides a bunch of transformation functions that can be applied to any data structure. It is a direct port of Clojure's [transducers](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming) in JavaScript. Read more in [this post](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data).
 
-The algorithm behind this, explained in the above post, not only allows for it to work with any data structure (arrays, objects, iterators, immutable data structures, you name it) but it also provides better performance than other alternatives such as underscore or lodash. This is because there are no intermediate collections.
+The algorithm behind this, explained in the above post, not only allows for it to work with any data structure (arrays, objects, iterators, immutable data structures, you name it) but it also provides better performance than other alternatives such as underscore or lodash. This is because there are no intermediate collections. See [this post](http://jlongster.com/Transducers.js-Round-2-with-Benchmarks) for benchmarks.
 
 ```
 npm install transducers.js
@@ -169,17 +169,7 @@ Immutable.Vector.from(
 
 We can use our familiar `seq` function because `Immutable.Vector` implements the iterator protocol, so we can iterator over it. Because `seq` is working with an iterator, it returns a new iterator that will *lazily transform each value*. We can simply pass this iterator into `Immutable.Vector.from` to construct a new one, and we have a new transformed immutable vector with no intermediate collections except for one lazy transformer!
 
-In fact, since we are not having to use any intermediate structures, it turns out that this is *faster than immutable-js' transformations themselves*, which are lazy. Laziness does not help here, since we are eagerly transforming the whole collection. And even if we did something like `take(10)`, we would still beat it because we can still short-circuit without any of the lazy machinery.
-
-Here is the result of running the above code with the builtin transformers against ours (see the [full benchmark](https://github.com/jlongster/transducers.js/blob/master/bench/immut.js)):
-
-```
-% node bench/immut.js
-Immutable map/filter (1000) x 5,497 ops/sec ±2.63% (91 runs sampled)
-transducer map/filter (1000) x 7,309 ops/sec ±0.73% (100 runs sampled)
-Immutable map/filter (100000) x 62.73 ops/sec ±0.85% (67 runs sampled)
-transducer map/filter (100000) x 80.15 ops/sec ±0.48% (71 runs sampled)
-```
+The builtin transformations perform well because they minimize allocations, but since we don't have any intermediate structures or laziness machinery, this performs slightly better. The point is not to beat it, but to show that both are high-performance but we can apply our performance to any data structure.
 
 ## CSP Channels
 
