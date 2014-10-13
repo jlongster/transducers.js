@@ -24,10 +24,10 @@ function add(x, y) {
 
 Immutable.Vector.prototype[protocols.transformer] = {
   init: function() {
-    return Immutable.Vector();
+    return Immutable.Vector().asMutable();
   },
   result: function(vec) {
-    return vec;
+    return vec.asImmutable();
   },
   step: function(vec, x) {
     return vec.push(x);
