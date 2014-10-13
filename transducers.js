@@ -85,9 +85,6 @@ ObjectIterator.prototype.next = function() {
 
 // helpers
 
-function isArray(x) {
-  return x instanceof Array;
-}
 var toString = Object.prototype.toString;
 var isArray = typeof Array.isArray === 'function' ? Array.isArray : function(obj) {
   return toString.call(obj) == '[object Array]';
