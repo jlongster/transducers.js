@@ -48,6 +48,14 @@ function benchArray(n) {
         even
       );
     })
+    .add('_.map/filter, lazy (' + n + ')', function() {
+      _(arr)
+        .map(addTen)
+        .map(double)
+        .filter(multipleOfFive)
+        .filter(even)
+        .value();
+    })
     .add('u.map/filter (' + n + ')', function() {
       // not even going to use chaining, it's slower
       u.filter(
@@ -90,8 +98,7 @@ suite.on('cycle', function(event) {
     if(currentData.size) {
       print();
     }
-    currentData = { size: size,
-                    cols: [] };
+    currentData = { size: size, cols: [] };
   }
 
   currentData.cols.push(event.target.hz);

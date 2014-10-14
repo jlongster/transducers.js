@@ -132,9 +132,6 @@ var transducers =
 
 	// helpers
 
-	function isArray(x) {
-	  return x instanceof Array;
-	}
 	var toString = Object.prototype.toString;
 	var isArray = typeof Array.isArray === 'function' ? Array.isArray : function(obj) {
 	  return toString.call(obj) == '[object Array]';
@@ -207,7 +204,7 @@ var transducers =
 
 	// transformations
 
-	function reducer(f) {
+	function transformer(f) {
 	  return {
 	    init: function() {
 	      throw new Error('init value unavailable');
@@ -656,7 +653,7 @@ var transducers =
 	  else if(isObject(to)) {
 	    return transduce(from, xform, objReducer, to);
 	  }
-	  else if(fulfillsProtocol(to, 'tranformer')) {
+	  else if(fulfillsProtocol(to, 'transformer')) {
 	    return transduce(from,
 	                     xform,
 	                     getProtocolProperty(to, 'transformer'),
@@ -703,7 +700,7 @@ var transducers =
 	  this.stepper = new Stepper(xform, iterator(coll));
 	}
 
-	LazyTransformer.prototype['@@iterator'] = function() {
+	LazyTransformer.prototype[protocols.iterator] = function() {
 	  return this;
 	}
 
@@ -740,7 +737,7 @@ var transducers =
 
 	module.exports = {
 	  reduce: reduce,
-	  reducer: reducer,
+	  transformer: transformer,
 	  Reduced: Reduced,
 	  iterator: iterator,
 	  push: push,
