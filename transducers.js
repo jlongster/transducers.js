@@ -111,7 +111,7 @@ function Reduced(val) {
  * This is for transforms that may call their nested transforms before
  * Reduced-wrapping the result (e.g. "take"), to avoid nested Reduced.
  */
-function ensure_reduced(val) {
+function ensureReduced(val) {
   if (val instanceof Reduced) {
     return val;
   } else {
@@ -124,7 +124,7 @@ function ensure_reduced(val) {
  * performing completion (like "partition"), to avoid signaling
  * termination after already completing.
  */
-function ensure_unreduced(v) {
+function ensureUnreduced(v) {
   if (v instanceof Reduced) {
     return v.val;
   } else {
@@ -403,13 +403,14 @@ Take.prototype.result = function(v) {
 Take.prototype.step = function(result, input) {
   if (this.i < this.n) {
     result = this.xform.step(result, input);
+    if(this.i + 1 >= this.n) {
+      // Finish reducing on the same step as the final value. TODO:
+      // double-check that this doesn't break any semantics
+      result = ensureReduced(result);
+    }
   }
-  this.i += 1;
-  if (this.i < this.n) {
-    return result;
-  } else {
-    return ensure_reduced(result);
-  }
+  this.i++;
+  return result;
 };
 
 function take(coll, n) {
@@ -509,7 +510,7 @@ Partition.prototype.init = function() {
 
 Partition.prototype.result = function(v) {
   if (this.i > 0) {
-    return ensure_unreduced(this.xform.step(v, this.part.slice(0, this.i)));
+    return ensureUnreduced(this.xform.step(v, this.part.slice(0, this.i)));
   }
   return this.xform.result(v);
 };
@@ -543,10 +544,10 @@ function partition(coll, n) {
 var NOTHING = {};
 
 function PartitionBy(f, xform) {
+  // TODO: take an "opts" object that allows the user to specify
+  // equality
   this.f = f;
   this.xform = xform;
-  // TODO: Shouldn't we take a reducer instead of always using an
-  // array (same for ""partition"")?
   this.part = [];
   this.last = NOTHING;
 }
@@ -558,7 +559,7 @@ PartitionBy.prototype.init = function() {
 PartitionBy.prototype.result = function(v) {
   var l = this.part.length;
   if (l > 0) {
-    return ensure_unreduced(this.xform.step(v, this.part.slice(0, l)));
+    return ensureUnreduced(this.xform.step(v, this.part.slice(0, l)));
   }
   return this.xform.result(v);
 };
@@ -576,9 +577,7 @@ PartitionBy.prototype.step = function(result, input) {
 };
 
 function partitionBy(coll, f, ctx) {
-  if (isFunction(coll)) {
-    ctx = f; f = coll; coll = null;
-  }
+  if (isFunction(coll)) { ctx = f; f = coll; coll = null; }
   f = bound(f, ctx);
 
   if (coll) {
