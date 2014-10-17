@@ -110,7 +110,7 @@ function Reduced(val) {
 /**
  * This is for tranforms that call their nested transforms when
  * performing completion (like "partition"), to avoid signaling
- * termination after completion.
+ * termination after already completing.
  */
 function ensure_unreduced(v) {
   if (v instanceof Reduced) {
@@ -521,6 +521,56 @@ function partition(coll, n) {
   };
 }
 
+var NOTHING = {};
+
+function PartitionBy(f, xform) {
+  this.f = f;
+  this.xform = xform;
+  // TODO: Shouldn't we take a reducer instead of always using an
+  // array (same for ""partition"")?
+  this.part = [];
+  this.last = NOTHING;
+}
+
+PartitionBy.prototype.init = function() {
+  return this.xform.init();
+};
+
+PartitionBy.prototype.result = function(v) {
+  var l = this.part.length;
+  if (l > 0) {
+    return ensure_unreduced(this.xform.step(v, this.part.slice(0, l)));
+  }
+  return this.xform.result(v);
+};
+
+PartitionBy.prototype.step = function(result, input) {
+  var current = this.f(input);
+  if (current === this.last || this.last === NOTHING) {
+    this.part.push(input);
+  } else {
+    result = this.xform.step(result, this.part);
+    this.part = [input];
+  }
+  this.last = current;
+  return result;
+};
+
+function partitionBy(coll, f, ctx) {
+  if (isFunction(coll)) {
+    ctx = f; f = coll; coll = null;
+  }
+  f = bound(f, ctx);
+
+  if (coll) {
+    return seq(coll, partitionBy(f));
+  }
+
+  return function(xform) {
+    return new PartitionBy(f, xform);
+  };
+}
+
 // pure transducers (cannot take collections)
 
 function Cat(xform) {
@@ -771,6 +821,7 @@ module.exports = {
   drop: drop,
   dropWhile: dropWhile,
   partition: partition,
+  partitionBy: partitionBy,
   range: range,
 
   protocols: protocols,
