@@ -115,7 +115,8 @@ function reduce(coll, xform, init) {
     while(++index < len) {
       result = xform.step(result, coll[index]);
       if(result instanceof Reduced) {
-        return result.val;
+        result = result.val;
+        break;
       }
     }
     return xform.result(result);
@@ -127,7 +128,8 @@ function reduce(coll, xform, init) {
     while(!val.done) {
       result = xform.step(result, val.value);
       if(result instanceof Reduced) {
-        return result.val;
+        result = result.val;
+        break;
       }
       val = iter.next();
     }
