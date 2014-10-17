@@ -107,6 +107,18 @@ function Reduced(val) {
   this.val = val;
 }
 
+/**
+ * This is for transforms that may call their nested transforms before
+ * Reduced-wrapping the result (e.g. "take"), to avoid nested Reduced.
+ */
+function ensure_reduced(val) {
+  if (val instanceof Reduced) {
+    return val;
+  } else {
+    return new Reduced(val);
+  }
+}
+
 function reduce(coll, xform, init) {
   if(isArray(coll)) {
     var result = init;
@@ -374,10 +386,15 @@ Take.prototype.result = function(v) {
 };
 
 Take.prototype.step = function(result, input) {
-  if(this.i++ < this.n) {
-    return this.xform.step(result, input);
+  if (this.i < this.n) {
+    result = this.xform.step(result, input);
   }
-  return new Reduced(result);
+  this.i += 1;
+  if (this.i < this.n) {
+    return result;
+  } else {
+    return ensure_reduced(result);
+  }
 };
 
 function take(coll, n) {
