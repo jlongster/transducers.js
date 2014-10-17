@@ -4,7 +4,7 @@ var t = require('../transducers');
 var { reduce, transformer, toArray, toObj, toIter, iterate, push, merge, empty,
       transduce, seq, into, compose, map, filter, remove,
       cat, mapcat, keep, dedupe, take, takeWhile,
-      drop, dropWhile, protocols } = t;
+      drop, dropWhile, partition, partitionBy, protocols } = t;
 
 var context = { num: 5 };
 
@@ -194,6 +194,51 @@ describe('', () => {
 
     eql(into([], dropWhile(lt(3)), [1, 2, 3, 2]),
         [3, 2]);
+  });
+
+  it('partition should work', () => {
+    eql(partition([1, 2, 3, 4], 2), [[1, 2], [3, 4]]);
+    eql(partition([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+
+    immutEql(partition(Immutable.Vector(1, 2, 3, 4), 2),
+             Immutable.Vector(
+               Immutable.Vector(1, 2),
+               Immutable.Vector(3, 4)
+             ));
+    immutEql(partition(Immutable.Vector(1, 2, 3, 4, 5), 2),
+             Immutable.Vector(
+               Immutable.Vector(1, 2),
+               Immutable.Vector(3, 4),
+               Immutable.Vector(5)
+             ));
+
+    eql(into([], partition(2), [1, 2, 3, 4]), [[1, 2], [3, 4]]);
+    eql(into([], partition(2), [1, 2, 3, 4, 5]), [[1, 2], [3, 4], [5]]);
+
+    // These 2 are tests for "ensure_unreduced" case
+    eql(into([], compose(partition(2), take(2)),
+             [1, 2, 3, 4, 5]),
+        [[1, 2], [3, 4]]);
+    eql(into([], compose(partition(2), take(3)),
+             [1, 2, 3, 4, 5]),
+        [[1, 2], [3, 4], [5]]);
+  });
+
+  it("partitionBy should work", () => {
+    var type = (x) => typeof x;
+
+    eql(partitionBy(["a", "b", 1, 2, "c", true, false, undefined], type),
+        [["a", "b"], [1, 2], ["c"], [true, false], [undefined]]);
+    immutEql(partitionBy(Immutable.Vector("a", "b", 1, 2, "c", true, false, undefined), type),
+             Immutable.Vector(["a", "b"], [1, 2], ["c"], [true, false], [undefined]));
+
+    // These 2 are tests for "ensure_unreduced" case
+    eql(into([], compose(partitionBy(type), take(4)),
+             ["a", "b", 1, 2, "c", true, false, undefined]),
+        [["a", "b"], [1, 2], ["c"], [true, false]]);
+    eql(into([], compose(partitionBy(type), take(5)),
+             ["a", "b", 1, 2, "c", true, false, undefined]),
+        [["a", "b"], [1, 2], ["c"], [true, false], [undefined]]);
   });
 
   it('cat should work', () => {

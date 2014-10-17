@@ -119,6 +119,19 @@ function ensure_reduced(val) {
   }
 }
 
+/**
+ * This is for tranforms that call their nested transforms when
+ * performing completion (like "partition"), to avoid signaling
+ * termination after already completing.
+ */
+function ensure_unreduced(v) {
+  if (v instanceof Reduced) {
+    return v.val;
+  } else {
+    return v;
+  }
+}
+
 function reduce(coll, xform, init) {
   if(isArray(coll)) {
     var result = init;
@@ -483,6 +496,100 @@ function dropWhile(coll, f, ctx) {
   }
 }
 
+function Partition(n, xform) {
+  this.n = n;
+  this.i = 0;
+  this.xform = xform;
+  this.part = new Array(n);
+}
+
+Partition.prototype.init = function() {
+  return this.xform.init();
+};
+
+Partition.prototype.result = function(v) {
+  if (this.i > 0) {
+    return ensure_unreduced(this.xform.step(v, this.part.slice(0, this.i)));
+  }
+  return this.xform.result(v);
+};
+
+Partition.prototype.step = function(result, input) {
+  this.part[this.i] = input;
+  this.i += 1;
+  if (this.i === this.n) {
+    var out = this.part.slice(0, this.n);
+    this.part = new Array(this.n);
+    this.i = 0;
+    return this.xform.step(result, out);
+  }
+  return result;
+};
+
+function partition(coll, n) {
+  if (isNumber(coll)) {
+    n = coll; coll = null;
+  }
+
+  if (coll) {
+    return seq(coll, partition(n));
+  }
+
+  return function(xform) {
+    return new Partition(n, xform);
+  };
+}
+
+var NOTHING = {};
+
+function PartitionBy(f, xform) {
+  this.f = f;
+  this.xform = xform;
+  // TODO: Shouldn't we take a reducer instead of always using an
+  // array (same for ""partition"")?
+  this.part = [];
+  this.last = NOTHING;
+}
+
+PartitionBy.prototype.init = function() {
+  return this.xform.init();
+};
+
+PartitionBy.prototype.result = function(v) {
+  var l = this.part.length;
+  if (l > 0) {
+    return ensure_unreduced(this.xform.step(v, this.part.slice(0, l)));
+  }
+  return this.xform.result(v);
+};
+
+PartitionBy.prototype.step = function(result, input) {
+  var current = this.f(input);
+  if (current === this.last || this.last === NOTHING) {
+    this.part.push(input);
+  } else {
+    result = this.xform.step(result, this.part);
+    this.part = [input];
+  }
+  this.last = current;
+  return result;
+};
+
+function partitionBy(coll, f, ctx) {
+  if (isFunction(coll)) {
+    ctx = f; f = coll; coll = null;
+  }
+  f = bound(f, ctx);
+
+  if (coll) {
+    return seq(coll, partitionBy(f));
+  }
+
+  return function(xform) {
+    return new PartitionBy(f, xform);
+  };
+}
+
 // pure transducers (cannot take collections)
 
 function Cat(xform) {
@@ -732,6 +839,8 @@ module.exports = {
   takeWhile: takeWhile,
   drop: drop,
   dropWhile: dropWhile,
+  partition: partition,
+  partitionBy: partitionBy,
   range: range,
 
   protocols: protocols,
