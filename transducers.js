@@ -107,6 +107,19 @@ function Reduced(val) {
   this.val = val;
 }
 
+/**
+ * This is for tranforms that call their nested transforms when
+ * performing completion (like "partition"), to avoid signaling
+ * termination after completion.
+ */
+function ensure_unreduced(v) {
+  if (v instanceof Reduced) {
+    return v.val;
+  } else {
+    return v;
+  }
+}
+
 function reduce(coll, xform, init) {
   if(isArray(coll)) {
     var result = init;
@@ -464,6 +477,50 @@ function dropWhile(coll, f, ctx) {
   }
 }
 
+function Partition(n, xform) {
+  this.n = n;
+  this.i = 0;
+  this.xform = xform;
+  this.part = new Array(n);
+}
+
+Partition.prototype.init = function() {
+  return this.xform.init();
+};
+
+Partition.prototype.result = function(v) {
+  if (this.i > 0) {
+    return ensure_unreduced(this.xform.step(v, this.part.slice(0, this.i)));
+  }
+  return this.xform.result(v);
+};
+
+Partition.prototype.step = function(result, input) {
+  this.part[this.i] = input;
+  this.i += 1;
+  if (this.i === this.n) {
+    var out = this.part.slice(0, this.n);
+    this.part = new Array(this.n);
+    this.i = 0;
+    return this.xform.step(result, out);
+  }
+  return result;
+};
+
+function partition(coll, n) {
+  if (isNumber(coll)) {
+    n = coll; coll = null;
+  }
+
+  if (coll) {
+    return seq(coll, partition(n));
+  }
+
+  return function(xform) {
+    return new Partition(n, xform);
+  };
+}
+
 // pure transducers (cannot take collections)
 
 function Cat(xform) {
@@ -713,6 +770,7 @@ module.exports = {
   takeWhile: takeWhile,
   drop: drop,
   dropWhile: dropWhile,
+  partition: partition,
   range: range,
 
   protocols: protocols,
