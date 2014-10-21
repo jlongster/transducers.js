@@ -104,7 +104,12 @@ function isNumber(x) {
 }
 
 function Reduced(val) {
-  this.val = val;
+  this.value = val;
+  this.__transducers_reduced__ = true;
+}
+
+function isReduced(val) {
+  return val instanceof Reduced || (val && val.__transducers_reduced__);
 }
 
 /**
@@ -112,7 +117,7 @@ function Reduced(val) {
  * Reduced-wrapping the result (e.g. "take"), to avoid nested Reduced.
  */
 function ensureReduced(val) {
-  if (val instanceof Reduced) {
+  if (isReduced(val)) {
     return val;
   } else {
     return new Reduced(val);
@@ -125,8 +130,8 @@ function ensureReduced(val) {
  * termination after already completing.
  */
 function ensureUnreduced(v) {
-  if (v instanceof Reduced) {
-    return v.val;
+  if (isReduced(v)) {
+    return v.value;
   } else {
     return v;
   }
@@ -139,8 +144,8 @@ function reduce(coll, xform, init) {
     var len = coll.length;
     while(++index < len) {
       result = xform.step(result, coll[index]);
-      if(result instanceof Reduced) {
-        result = result.val;
+      if(isReduced(result)) {
+        result = result.value;
         break;
       }
     }
@@ -152,8 +157,8 @@ function reduce(coll, xform, init) {
     var val = iter.next();
     while(!val.done) {
       result = xform.step(result, val.value);
-      if(result instanceof Reduced) {
-        result = result.val;
+      if(isReduced(result)) {
+        result = result.value;
         break;
       }
       val = iter.next();
@@ -614,7 +619,7 @@ Cat.prototype.step = function(result, input) {
     },
     step: function(result, input) {
       var val = xform.step(result, input);
-      return (val instanceof Reduced) ? new Reduced(val) : val;
+      return isReduced(val) ? new Reduced(val) : val;
     }
   }
 
@@ -744,7 +749,7 @@ function into(to, xform, from) {
 
 var stepper = {
   result: function(v) {
-    return (v instanceof Reduced) ? v.val : v;
+    return isReduced(v) ? v.value : v;
   },
   step: function(lt, x) {
     lt.items.push(x);
@@ -761,7 +766,7 @@ Stepper.prototype.step = function(lt) {
   var len = lt.items.length;
   while(lt.items.length === len) {
     var n = this.iter.next();
-    if(n.done || n.value instanceof Reduced) {
+    if(n.done || isReduced(n.value)) {
       // finalize
       this.xform.result(this);
       break;
