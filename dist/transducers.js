@@ -150,8 +150,42 @@ var transducers =
 	  return typeof x === 'number';
 	}
 
-	function Reduced(val) {
-	  this.val = val;
+	function Reduced(value) {
+	  this.__transducers_reduced__ = true;
+	  this.value = value;
+	}
+
+	function isReduced(x) {
+	  return (x instanceof Reduced) || (x && x.__transducers_reduced__);
+	}
+
+	function deref(x) {
+	  return x.value;
+	}
+
+	/**
+	 * This is for transforms that may call their nested transforms before
+	 * Reduced-wrapping the result (e.g. "take"), to avoid nested Reduced.
+	 */
+	function ensureReduced(val) {
+	  if(isReduced(val)) {
+	    return val;
+	  } else {
+	    return new Reduced(val);
+	  }
+	}
+
+	/**
+	 * This is for tranforms that call their nested transforms when
+	 * performing completion (like "partition"), to avoid signaling
+	 * termination after already completing.
+	 */
+	function ensureUnreduced(v) {
+	  if(isReduced(v)) {
+	    return deref(v);
+	  } else {
+	    return v;
+	  }
 	}
 
 	function reduce(coll, xform, init) {
@@ -161,8 +195,9 @@ var transducers =
 	    var len = coll.length;
 	    while(++index < len) {
 	      result = xform.step(result, coll[index]);
-	      if(result instanceof Reduced) {
-	        return result.val;
+	      if(isReduced(result)) {
+	        result = deref(result);
+	        break;
 	      }
 	    }
 	    return xform.result(result);
@@ -173,8 +208,9 @@ var transducers =
 	    var val = iter.next();
 	    while(!val.done) {
 	      result = xform.step(result, val.value);
-	      if(result instanceof Reduced) {
-	        return result.val;
+	      if(isReduced(result)) {
+	        result = deref(result);
+	        break;
 	      }
 	      val = iter.next();
 	    }
@@ -421,10 +457,16 @@ var transducers =
 	};
 
 	Take.prototype.step = function(result, input) {
-	  if(this.i++ < this.n) {
-	    return this.xform.step(result, input);
+	  if (this.i < this.n) {
+	    result = this.xform.step(result, input);
+	    if(this.i + 1 >= this.n) {
+	      // Finish reducing on the same step as the final value. TODO:
+	      // double-check that this doesn't break any semantics
+	      result = ensureReduced(result);
+	    }
 	  }
-	  return new Reduced(result);
+	  this.i++;
+	  return result;
 	};
 
 	function take(coll, n) {
@@ -511,6 +553,98 @@ var transducers =
 	  }
 	}
 
+	function Partition(n, xform) {
+	  this.n = n;
+	  this.i = 0;
+	  this.xform = xform;
+	  this.part = new Array(n);
+	}
+
+	Partition.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	Partition.prototype.result = function(v) {
+	  if (this.i > 0) {
+	    return ensureUnreduced(this.xform.step(v, this.part.slice(0, this.i)));
+	  }
+	  return this.xform.result(v);
+	};
+
+	Partition.prototype.step = function(result, input) {
+	  this.part[this.i] = input;
+	  this.i += 1;
+	  if (this.i === this.n) {
+	    var out = this.part.slice(0, this.n);
+	    this.part = new Array(this.n);
+	    this.i = 0;
+	    return this.xform.step(result, out);
+	  }
+	  return result;
+	};
+
+	function partition(coll, n) {
+	  if (isNumber(coll)) {
+	    n = coll; coll = null;
+	  }
+
+	  if (coll) {
+	    return seq(coll, partition(n));
+	  }
+
+	  return function(xform) {
+	    return new Partition(n, xform);
+	  };
+	}
+
+	var NOTHING = {};
+
+	function PartitionBy(f, xform) {
+	  // TODO: take an "opts" object that allows the user to specify
+	  // equality
+	  this.f = f;
+	  this.xform = xform;
+	  this.part = [];
+	  this.last = NOTHING;
+	}
+
+	PartitionBy.prototype.init = function() {
+	  return this.xform.init();
+	};
+
+	PartitionBy.prototype.result = function(v) {
+	  var l = this.part.length;
+	  if (l > 0) {
+	    return ensureUnreduced(this.xform.step(v, this.part.slice(0, l)));
+	  }
+	  return this.xform.result(v);
+	};
+
+	PartitionBy.prototype.step = function(result, input) {
+	  var current = this.f(input);
+	  if (current === this.last || this.last === NOTHING) {
+	    this.part.push(input);
+	  } else {
+	    result = this.xform.step(result, this.part);
+	    this.part = [input];
+	  }
+	  this.last = current;
+	  return result;
+	};
+
+	function partitionBy(coll, f, ctx) {
+	  if (isFunction(coll)) { ctx = f; f = coll; coll = null; }
+	  f = bound(f, ctx);
+
+	  if (coll) {
+	    return seq(coll, partitionBy(f));
+	  }
+
+	  return function(xform) {
+	    return new PartitionBy(f, xform);
+	  };
+	}
+
 	// pure transducers (cannot take collections)
 
 	function Cat(xform) {
@@ -536,7 +670,7 @@ var transducers =
 	    },
 	    step: function(result, input) {
 	      var val = xform.step(result, input);
-	      return (val instanceof Reduced) ? new Reduced(val) : val;
+	      return isReduced(val) ? deref(val) : val;
 	    }
 	  }
 
@@ -666,7 +800,7 @@ var transducers =
 
 	var stepper = {
 	  result: function(v) {
-	    return (v instanceof Reduced) ? v.val : v;
+	    return isReduced(v) ? deref(v) : v;
 	  },
 	  step: function(lt, x) {
 	    lt.items.push(x);
@@ -683,7 +817,7 @@ var transducers =
 	  var len = lt.items.length;
 	  while(lt.items.length === len) {
 	    var n = this.iter.next();
-	    if(n.done || n.value instanceof Reduced) {
+	    if(n.done || isReduced(n.value)) {
 	      // finalize
 	      this.xform.result(this);
 	      break;
@@ -760,6 +894,8 @@ var transducers =
 	  takeWhile: takeWhile,
 	  drop: drop,
 	  dropWhile: dropWhile,
+	  partition: partition,
+	  partitionBy: partitionBy,
 	  range: range,
 
 	  protocols: protocols,
