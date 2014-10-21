@@ -1,6 +1,6 @@
 {
   "name": "transducers.js",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "author": "James Long <longster@gmail.com>",
   "main": "./transducers.js",
   "repository": {
