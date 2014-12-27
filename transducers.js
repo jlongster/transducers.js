@@ -680,19 +680,6 @@ var objReducer = {
   step: merge
 };
 
-function getReducer(coll) {
-  if(isArray(coll)) {
-    return arrayReducer;
-  }
-  else if(isObject(coll)) {
-    return objReducer;
-  }
-  else if(fulfillsProtocol(coll, 'transformer')) {
-    return getProtocolProperty(coll, 'transformer');
-  }
-  throwProtocolError('getReducer', coll);
-}
-
 // building new collections
 
 function toArray(coll, xform) {
