@@ -217,7 +217,7 @@ t.seq(Immutable.List.of(1, 2, 3, 4, 5),
         t.map(function(x) { return x * 2; }),
         t.filter(function(x) { return x % 5 === 0; }),
         t.filter(function(x) { return x % 2 === 0; })));
-// -> Vector [ 30 ]
+// -> List [ 30 ]
 ```
 
 ## Running Tests
