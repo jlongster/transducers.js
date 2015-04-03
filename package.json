@@ -1,13 +1,18 @@
 {
   "name": "transducers.js",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "James Long <longster@gmail.com>",
   "main": "./transducers.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/jlongster/transducers.js.git"
   },
-  "keywords": ["browser", "client", "functional", "util"],
+  "keywords": [
+    "browser",
+    "client",
+    "functional",
+    "util"
+  ],
   "devDependencies": {
     "benchmark": "^1.0.0",
     "es6-macros": "0.0.7",
@@ -16,12 +21,14 @@
     "gulp-header": "^1.1.1",
     "gulp-sourcemaps": "^1.1.5",
     "gulp-sweetjs": "^0.5.4",
-    "immutable": "^2.0.17",
     "lodash": "lodash/lodash",
     "mocha": "^1.21.4",
     "source-map-support": "^0.2.7",
     "sweet.js": "^0.7.1",
     "underscore": "^1.7.0",
     "webpack": "^1.4.0-beta9"
+  },
+  "dependencies": {
+    "immutable": "^3.7.1"
   }
 }

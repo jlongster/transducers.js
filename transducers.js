@@ -603,25 +603,25 @@ function Interpose(sep, xform) {
   this.started = false;
 }
 
-Interpose.prototype.init = function() {
-  return this.xform.init();
+Interpose.prototype['@@transducer/init'] = function() {
+  return this.xform['@@transducer/init']();
 };
 
-Interpose.prototype.result = function(v) {
-  return this.xform.result(v);
+Interpose.prototype['@@transducer/result'] = function(v) {
+  return this.xform['@@transducer/result'](v);
 };
 
-Interpose.prototype.step = function(result, input) {
+Interpose.prototype['@@transducer/step'] = function(result, input) {
   if (this.started) {
-    var withSep = this.xform.step(result, this.sep);
+    var withSep = this.xform['@@transducer/step'](result, this.sep);
     if (isReduced(withSep)) {
       return withSep;
     } else {
-      return this.xform.step(withSep, input);
+      return this.xform['@@transducer/step'](withSep, input);
     }
   } else {
     this.started = true;
-    return this.xform.step(result, input);
+    return this.xform['@@transducer/step'](result, input);
   }
 };
 
@@ -645,19 +645,19 @@ function Repeat(n, xform) {
   this.n = n;
 }
 
-Repeat.prototype.init = function() {
-  return this.xform.init();
+Repeat.prototype['@@transducer/init'] = function() {
+  return this.xform['@@transducer/init']();
 };
 
-Repeat.prototype.result = function(v) {
-  return this.xform.result(v);
+Repeat.prototype['@@transducer/result'] = function(v) {
+  return this.xform['@@transducer/result'](v);
 };
 
-Repeat.prototype.step = function(result, input) {
+Repeat.prototype['@@transducer/step'] = function(result, input) {
   var n = this.n;
   var r = result;
   for (var i = 0; i < n; i++) {
-    r = this.xform.step(r, input);
+    r = this.xform['@@transducer/step'](r, input);
     if (isReduced(r)) {
       break;
     }
@@ -686,18 +686,18 @@ function TakeNth(n, xform) {
   this.i = -1;
 }
 
-TakeNth.prototype.init = function() {
-  return this.xform.init();
+TakeNth.prototype['@@transducer/init'] = function() {
+  return this.xform['@@transducer/init']();
 };
 
-TakeNth.prototype.result = function(v) {
-  return this.xform.result(v);
+TakeNth.prototype['@@transducer/result'] = function(v) {
+  return this.xform['@@transducer/result'](v);
 };
 
-TakeNth.prototype.step = function(result, input) {
+TakeNth.prototype['@@transducer/step'] = function(result, input) {
   this.i += 1;
   if (this.i % this.n === 0) {
-    return this.xform.step(result, input);
+    return this.xform['@@transducer/step'](result, input);
   }
   return result;
 };
