@@ -4,7 +4,8 @@ var t = require('../transducers');
 var { reduce, transformer, toArray, toObj, toIter, iterate, push, merge, empty,
       transduce, seq, into, compose, map, filter, remove,
       cat, mapcat, keep, dedupe, take, takeWhile,
-      drop, dropWhile, partition, partitionBy, protocols } = t;
+      drop, dropWhile, partition, partitionBy,
+      interpose, repeat, takeNth, protocols } = t;
 
 var context = { num: 5 };
 
@@ -239,6 +240,55 @@ describe('', () => {
     eql(into([], compose(partitionBy(type), take(5)),
              ["a", "b", 1, 2, "c", true, false, undefined]),
         [["a", "b"], [1, 2], ["c"], [true, false], [undefined]]);
+  });
+
+  it("interpose should work", () => {
+    eql(interpose([1, 2, 3], null), [1, null, 2, null, 3]);
+    immutEql(interpose(Immutable.Vector(1, 2, 3), undefined),
+             Immutable.Vector(1, undefined, 2, undefined, 3));
+
+    eql(interpose([], null), []);
+    immutEql(interpose(Immutable.Vector(), null), Immutable.Vector());
+
+    // Test early-termination handling
+    eql(into([], compose(interpose(null), take(4)),
+             [1, 2, 3]),
+        [1, null, 2, null]);
+    eql(into([], compose(interpose(null), take(3)),
+             [1, 2, 3]),
+        [1, null, 2]);
+  });
+
+  it("repeat should work", () => {
+    eql(repeat([1, 2, 3], 2), [1, 1, 2, 2, 3, 3]);
+    immutEql(repeat(Immutable.Vector(1, 2), 3),
+             Immutable.Vector(1, 1, 1, 2, 2, 2));
+
+    eql(repeat([], 2), []);
+    immutEql(repeat(Immutable.Vector(), 3), Immutable.Vector());
+
+    eql(repeat([1, 2, 3], 0), []);
+    eql(repeat([1, 2, 3], 1), [1, 2, 3]);
+
+    // Test early-termination handling
+    eql(into([], compose(repeat(2), take(3)),
+             [1, 2, 3]),
+        [1, 1, 2]);
+    eql(into([], compose(repeat(3), take(2)),
+             [1, 2, 3]),
+        [1, 1]);
+  });
+
+
+  it("takeNth should work", () => {
+    eql(takeNth([1, 2, 3, 4], 2), [1, 3]);
+    immutEql(takeNth(Immutable.Vector(1, 2, 3, 4, 5), 2),
+             Immutable.Vector(1, 3, 5));
+
+    eql(takeNth([], 2), []);
+    immutEql(takeNth(Immutable.Vector(), 3), Immutable.Vector());
+
+    eql(takeNth([1, 2, 3], 1), [1, 2, 3]);
   });
 
   it('cat should work', () => {

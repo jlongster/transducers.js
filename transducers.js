@@ -598,6 +598,125 @@ function partitionBy(coll, f, ctx) {
   };
 }
 
+function Interpose(sep, xform) {
+  this.sep = sep;
+  this.xform = xform;
+  this.started = false;
+}
+
+Interpose.prototype.init = function() {
+  return this.xform.init();
+};
+
+Interpose.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+Interpose.prototype.step = function(result, input) {
+  if (this.started) {
+    var withSep = this.xform.step(result, this.sep);
+    if (isReduced(withSep)) {
+      return withSep;
+    } else {
+      return this.xform.step(withSep, input);
+    }
+  } else {
+    this.started = true;
+    return this.xform.step(result, input);
+  }
+};
+
+/**
+ * Returns a new collection containing elements of the given
+ * collection, separated by the specified separator. Returns a
+ * transducer if a collection is not provided.
+ */
+function interpose(coll, separator) {
+  if (arguments.length === 1) {
+    separator = coll;
+    return function(xform) {
+      return new Interpose(separator, xform);
+    };
+  }
+  return seq(coll, interpose(separator));
+}
+
+function Repeat(n, xform) {
+  this.xform = xform;
+  this.n = n;
+}
+
+Repeat.prototype.init = function() {
+  return this.xform.init();
+};
+
+Repeat.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+Repeat.prototype.step = function(result, input) {
+  var n = this.n;
+  var r = result;
+  for (var i = 0; i < n; i++) {
+    r = this.xform.step(r, input);
+    if (isReduced(r)) {
+      break;
+    }
+  }
+  return r;
+};
+
+/**
+ * Returns a new collection containing elements of the given
+ * collection, each repeated n times. Returns a transducer if a
+ * collection is not provided.
+ */
+function repeat(coll, n) {
+  if (arguments.length === 1) {
+    n = coll;
+    return function(xform) {
+      return new Repeat(n, xform);
+    };
+  }
+  return seq(coll, repeat(n));
+}
+
+function TakeNth(n, xform) {
+  this.xform = xform;
+  this.n = n;
+  this.i = -1;
+}
+
+TakeNth.prototype.init = function() {
+  return this.xform.init();
+};
+
+TakeNth.prototype.result = function(v) {
+  return this.xform.result(v);
+};
+
+TakeNth.prototype.step = function(result, input) {
+  this.i += 1;
+  if (this.i % this.n === 0) {
+    return this.xform.step(result, input);
+  }
+  return result;
+};
+
+/**
+ * Returns a new collection of every nth element of the given
+ * collection. Returns a transducer if a collection is not provided.
+ */
+function takeNth(coll, nth) {
+  if (arguments.length === 1) {
+    nth = coll;
+    return function(xform) {
+      return new TakeNth(nth, xform);
+    };
+  }
+  return seq(coll, takeNth(nth));
+}
+
 // pure transducers (cannot take collections)
 
 function Cat(xform) {
@@ -833,10 +952,13 @@ module.exports = {
   dedupe: dedupe,
   take: take,
   takeWhile: takeWhile,
+  takeNth: takeNth,
   drop: drop,
   dropWhile: dropWhile,
   partition: partition,
   partitionBy: partitionBy,
+  interpose: interpose,
+  repeat: repeat,
   range: range,
 
   protocols: protocols,
