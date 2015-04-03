@@ -813,6 +813,7 @@ module.exports = {
   reduce: reduce,
   transformer: transformer,
   Reduced: Reduced,
+  isReduced: isReduced,
   iterator: iterator,
   push: push,
   merge: merge,
