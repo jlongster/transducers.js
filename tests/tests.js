@@ -4,7 +4,7 @@ var t = require('../transducers');
 var { reduce, transformer, toArray, toObj, toIter, iterate, push, merge, empty,
       transduce, seq, into, compose, map, filter, remove,
       cat, mapcat, keep, dedupe, take, takeWhile,
-      drop, dropWhile, partition, partitionBy, protocols } = t;
+      drop, dropWhile, partition, partitionBy } = t;
 
 var context = { num: 5 };
 
@@ -22,16 +22,16 @@ function add(x, y) {
   return x + y;
 }
 
-Immutable.Vector.prototype[protocols.transformer] = {
-  init: function() {
-    return Immutable.Vector().asMutable();
-  },
-  result: function(vec) {
-    return vec.asImmutable();
-  },
-  step: function(vec, x) {
-    return vec.push(x);
-  }
+Immutable.Vector.prototype['@@transducer/init'] = function() {
+  return Immutable.Vector().asMutable();
+};
+
+Immutable.Vector.prototype['@@transducer/result'] = function(vec) {
+  return vec.asImmutable();
+};
+
+Immutable.Vector.prototype['@@transducer/step'] = function(vec, x) {
+  return vec.push(x);
 };
 
 function eq(x, y) {
@@ -57,11 +57,10 @@ describe('', () => {
 
   it('transformer protocol should work', () => {
     var vec = Immutable.Vector(1, 2, 3);
-    var transformer = vec[protocols.transformer];
 
-    immutEql(transformer.init(), Immutable.Vector());
+    immutEql(vec['@@transducer/init'](), Immutable.Vector());
 
-    immutEql(transformer.step(vec, 4),
+    immutEql(vec['@@transducer/step'](vec, 4),
              Immutable.Vector(1, 2, 3, 4));
   });
 
@@ -328,7 +327,7 @@ describe('', () => {
                          map(x => x + 1),
                          filter(x => x % 2 === 0)
                        ),
-                       Immutable.Vector.prototype[protocols.transformer],
+                       Immutable.Vector.prototype,
                        Immutable.Vector()),
              Immutable.Vector(2, 4));
 

@@ -184,28 +184,31 @@ var ch = chan(1, compose(
 ));
 ```
 
-## The `transformer` protocol
+## The `transducer` protocol
 
-While it's great that you can apply transducers to custom data structures, it's a bit annoying to always have to use constructor functions like `Immutable.Vector.from`. One option is to define a new protocol complementary to `iterator`. I call it the `transformer` protocol.
+While it's great that you can apply transducers to custom data structures, it's a bit annoying to always have to use constructor functions like `Immutable.Vector.from`. One option is to define a new protocol complementary to `iterator`.
 
-To implement the transformer protocol, you add a transformer to the prototype of your data structure. A transformer is an object with three methods: `init`, `result`, and `step`. `init` returns a new empty object, `result`, can perform any finalization steps on the resulting collection, and `step` perform a reduce. Here's what it looks like for `Immutable.Vector`:
+This conforms to the [official transducer spec](https://github.com/cognitect-labs/transducers-js/issues/20) so if you implement this, you can use it with all transducer libraries that conform to it.
+
+To implement the transducer protocol, you add methods to the prototype of your data structure. A transformer is an object with three methods: `init`, `result`, and `step`. `init` returns a new empty object, `result`, can perform any finalization steps on the resulting collection, and `step` performs a reduce. 
+
+These methods are namespaced and in the future could be symbols. Here's what it looks like for `Immutable.Vector`:
 
 ```js
-var t = require('./transducers');
-Immutable.Vector.prototype[t.protocols.transformer] = {
-  init: function() {
-    return Immutable.Vector().asMutable();
-  },
-  result: function(vec) {
-    return vec.asImmutable();
-  },
-  step: function(vec, x) {
-    return vec.push(x);
-  }
+Immutable.Vector.prototype['@@transducer/init'] = function() {
+  return Immutable.Vector().asMutable();
+};
+
+Immutable.Vector.prototype['@@transducer/result'] = function(vec) {
+  return vec.asImmutable();
+};
+
+Immutable.Vector.prototype['@@transducer/step'] = function(vec, x) {
+  return vec.push(x);
 };
 ```
 
-If you implement the transformer protocol, now your data structure will work with *all* of the builtin functions. You can just use `seq` like normal and you get back an immutable vector!
+If you implement the transducer protocol, now your data structure will work with *all* of the builtin functions. You can just use `seq` like normal and you get back an immutable vector!
 
 ```js
 t.seq(Immutable.Vector(1, 2, 3, 4, 5),
