@@ -35,7 +35,7 @@ function* nums() {
 into([], transform, nums());
 // -> [ 6, 12 ]
 
-into([], transform, Immutable.Vector(1, 2, 3, 4, 5))
+into([], transform, Immutable.List.of(1, 2, 3, 4, 5))
 // -> [ 6, 12 ]
 ```
 
@@ -157,7 +157,7 @@ This library provides a few small utility functions:
 We've talked about how this can be applied to any data structure &mdash; let's see that in action. Here's how you could use this with [immutable-js](https://github.com/facebook/immutable-js).
 
 ```js
-Immutable.Vector.from(
+Immutable.fromJS(
   seq(Immutable.Vector(1, 2, 3, 4, 5),
       compose(
         map(function(x) { return x + 10; }),
@@ -186,32 +186,32 @@ var ch = chan(1, compose(
 
 ## The `transducer` protocol
 
-While it's great that you can apply transducers to custom data structures, it's a bit annoying to always have to use constructor functions like `Immutable.Vector.from`. One option is to define a new protocol complementary to `iterator`.
+While it's great that you can apply transducers to custom data structures, it's a bit annoying to always have to use constructor functions like `Immutable.fromJS`. One option is to define a new protocol complementary to `iterator`.
 
 This conforms to the [official transducer spec](https://github.com/cognitect-labs/transducers-js/issues/20) so if you implement this, you can use it with all transducer libraries that conform to it.
 
 To implement the transducer protocol, you add methods to the prototype of your data structure. A transformer is an object with three methods: `init`, `result`, and `step`. `init` returns a new empty object, `result`, can perform any finalization steps on the resulting collection, and `step` performs a reduce. 
 
-These methods are namespaced and in the future could be symbols. Here's what it looks like for `Immutable.Vector`:
+These methods are namespaced and in the future could be symbols. Here's what it looks like for `Immutable.List`:
 
 ```js
-Immutable.Vector.prototype['@@transducer/init'] = function() {
-  return Immutable.Vector().asMutable();
+Immutable.List.prototype['@@transducer/init'] = function() {
+  return Immutable.List().asMutable();
 };
 
-Immutable.Vector.prototype['@@transducer/result'] = function(vec) {
-  return vec.asImmutable();
+Immutable.List.prototype['@@transducer/result'] = function(lst) {
+  return lst.asImmutable();
 };
 
-Immutable.Vector.prototype['@@transducer/step'] = function(vec, x) {
-  return vec.push(x);
+Immutable.List.prototype['@@transducer/step'] = function(lst, x) {
+  return lst.push(x);
 };
 ```
 
 If you implement the transducer protocol, now your data structure will work with *all* of the builtin functions. You can just use `seq` like normal and you get back an immutable vector!
 
 ```js
-t.seq(Immutable.Vector(1, 2, 3, 4, 5),
+t.seq(Immutable.List.of(1, 2, 3, 4, 5),
       t.compose(
         t.map(function(x) { return x + 10; }),
         t.map(function(x) { return x * 2; }),
