@@ -1,6 +1,6 @@
 {
   "name": "transducers.js",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "author": "James Long <longster@gmail.com>",
   "main": "./transducers.js",
   "repository": {
@@ -26,9 +26,7 @@
     "source-map-support": "^0.2.7",
     "sweet.js": "^0.7.1",
     "underscore": "^1.7.0",
-    "webpack": "^1.4.0-beta9"
-  },
-  "dependencies": {
+    "webpack": "^1.4.0-beta9",
     "immutable": "^3.7.1"
   }
 }
