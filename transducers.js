@@ -4,7 +4,7 @@
 var symbolExists = typeof Symbol !== 'undefined';
 
 var protocols = {
-  iterator: symbolExists ? Symbol.iterator : '@@iterator'
+  iterator: symbolExists && Symbol.iterator || '@@iterator'
 };
 
 function throwProtocolError(name, coll) {
@@ -31,12 +31,13 @@ function iterator(coll) {
   if(iter) {
     return iter.call(coll);
   }
-  else if(coll.next) {
+  else if(typeof coll.next === 'function') {
     // Basic duck typing to accept an ill-formed iterator that doesn't
     // conform to the iterator protocol (all iterators should have the
     // @@iterator method and return themselves, but some engines don't
-    // have that on generators like older v8)
-    return coll;
+    // have that on generators like older v8) and wrap it.
+    
+    return new WrappedIterator(coll);
   }
   else if(isArray(coll)) {
     return new ArrayIterator(coll);
@@ -45,6 +46,20 @@ function iterator(coll) {
     return new ObjectIterator(coll);
   }
 }
+
+function selfIteratorProtocol() {
+  return this;
+}
+
+function WrappedIterator(iter) {
+  this.iter = iter;
+}
+
+WrappedIterator.prototype[protocols.iterator] = selfIteratorProtocol;
+
+WrappedIterator.prototype.next = function() {
+  return this.iter.next();
+};
 
 function ArrayIterator(arr) {
   this.arr = arr;
@@ -62,6 +77,8 @@ ArrayIterator.prototype.next = function() {
     done: true
   }
 };
+
+ArrayIterator.prototype[protocols.iterator] = selfIteratorProtocol;
 
 function ObjectIterator(obj) {
   this.obj = obj;
@@ -81,6 +98,8 @@ ObjectIterator.prototype.next = function() {
     done: true
   }
 };
+
+ObjectIterator.prototype[protocols.iterator] = selfIteratorProtocol;
 
 // helpers
 
