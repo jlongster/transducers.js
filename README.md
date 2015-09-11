@@ -74,7 +74,7 @@ var transform = compose(
 );
 ```
 
-`compose` is a provided function that simply turns `compose(f, g)` into `x => f(g(x))`. You use it to build up transformations. The above transformation would always run the map and filter **only twice** becaue only two items are needed, and it short-circuits once it gets two items. Again, this is done without laziness, read more [here](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data).
+`compose` is a provided function that simply turns `compose(f, g)` into `x => f(g(x))`. You use it to build up transformations. The above transformation would always run the map and filter **only twice** because only two items are needed, and it short-circuits once it gets two items. Again, this is done without laziness, read more [here](http://jlongster.com/Transducers.js--A-JavaScript-Library-for-Transformation-of-Data).
 
 There are also 2 transducers available for taking collections and "catting" them into the transformation stream:
 
