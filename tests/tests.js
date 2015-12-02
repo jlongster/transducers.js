@@ -424,7 +424,10 @@ describe('', () => {
       },
     };
 
+    var protocol = typeof Symbol !== 'undefined' ? Symbol.iterator : '@@iterator';
     var lt = toIter(nums, map(x => x * 2));
+
+    expect(lt[protocol]()).to.equal(lt);
     expect(lt instanceof t.LazyTransformer).to.be.ok();
     expect(toArray(lt, take(5)),
            [0, 2, 4, 6, 8]);
