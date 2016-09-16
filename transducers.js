@@ -8,8 +8,9 @@ var protocols = {
 };
 
 function throwProtocolError(name, coll) {
-  throw new Error("don't know how to " + name + " collection: " +
-                  coll);
+  throw new Error(
+    "don't know how to " + name + " collection: " + coll
+  );
 }
 
 function fulfillsProtocol(obj, name) {

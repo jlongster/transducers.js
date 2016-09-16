@@ -7,6 +7,9 @@
     "type": "git",
     "url": "https://github.com/jlongster/transducers.js.git"
   },
+  "scripts": {
+    "test": "gulp && mocha ./build/*.spec.js"
+  },
   "keywords": [
     "browser",
     "client",
@@ -14,19 +17,19 @@
     "util"
   ],
   "devDependencies": {
-    "benchmark": "^1.0.0",
+    "benchmark": "^2.1.1",
     "es6-macros": "0.0.7",
     "expect.js": "^0.3.1",
-    "gulp": "^3.8.8",
-    "gulp-header": "^1.1.1",
-    "gulp-sourcemaps": "^1.1.5",
-    "gulp-sweetjs": "^0.5.4",
+    "gulp": "^3.9.1",
+    "gulp-header": "^1.8.8",
+    "gulp-sourcemaps": "^1.6.0",
+    "gulp-sweetjs": "^0.6.1",
     "lodash": "lodash/lodash",
-    "mocha": "^1.21.4",
-    "source-map-support": "^0.2.7",
-    "sweet.js": "^0.7.1",
-    "underscore": "^1.7.0",
-    "webpack": "^1.4.0-beta9",
-    "immutable": "^3.7.1"
+    "mocha": "^3.0.2",
+    "source-map-support": "^0.4.2",
+    "sweet.js": "^2.2.1",
+    "underscore": "^1.8.3",
+    "webpack": "^1.13.2",
+    "immutable": "^3.8.1"
   }
 }
