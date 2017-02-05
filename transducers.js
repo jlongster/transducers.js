@@ -99,7 +99,7 @@ function isObject(x) {
 }
 
 function isNumber(x) {
-  return typeof x === 'number';
+  return typeof x === 'number' && x === x;
 }
 
 function Reduced(value) {
