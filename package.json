@@ -4,7 +4,9 @@
   "author": "James Long <longster@gmail.com>",
   "main": "./transducers.js",
   "scripts": {
-    "test": "mocha ./tests/tests.js"
+    "test": "mocha ./tests/tests.js",
+    "build": "webpack",
+    "build:uglify": "NODE_ENV=production webpack"
   },
   "repository": {
     "type": "git",
