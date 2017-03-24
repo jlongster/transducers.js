@@ -976,6 +976,6 @@ module.exports = {
   interpose: interpose,
   repeat: repeat,
   range: range,
-
+  protocols: protocols,
   LazyTransformer: LazyTransformer
 };
