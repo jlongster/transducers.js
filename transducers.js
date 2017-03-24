@@ -35,8 +35,9 @@ function iterator(coll) {
     // Basic duck typing to accept an ill-formed iterator that doesn't
     // conform to the iterator protocol (all iterators should have the
     // @@iterator method and return themselves, but some engines don't
-    // have that on generators like older v8)
-    return coll;
+    // have that on generators like older v8) and wrap it.
+    
+    return coll[protocols.iterator] ? coll : new WrappedIterator(coll);
   }
   else if(isArray(coll)) {
     return new ArrayIterator(coll);
@@ -46,10 +47,20 @@ function iterator(coll) {
   }
 }
 
+function WrappedIterator(iter) {
+  this.wrapped = iter;
+}
+
+WrappedIterator.prototype.next = function() {
+  return this.wrapped.next.apply(this.wrapped, arguments);
+};
+WrappedIterator.prototype[protocols.iterator] = returnThis;
+
 function ArrayIterator(arr) {
   this.arr = arr;
   this.index = 0;
 }
+
 
 ArrayIterator.prototype.next = function() {
   if(this.index < this.arr.length) {
@@ -62,6 +73,7 @@ ArrayIterator.prototype.next = function() {
     done: true
   }
 };
+ArrayIterator.prototype[protocols.iterator] = returnThis;
 
 function ObjectIterator(obj) {
   this.obj = obj;
@@ -81,6 +93,7 @@ ObjectIterator.prototype.next = function() {
     done: true
   }
 };
+ObjectIterator.prototype[protocols.iterator] = returnThis;
 
 // helpers
 
@@ -895,9 +908,7 @@ function LazyTransformer(xform, coll) {
   this.stepper = new Stepper(xform, iterator(coll));
 }
 
-LazyTransformer.prototype[protocols.iterator] = function() {
-  return this;
-}
+LazyTransformer.prototype[protocols.iterator] = returnThis;
 
 LazyTransformer.prototype.next = function() {
   this['@@transducer/step']();
@@ -927,6 +938,10 @@ function range(n) {
     arr[i] = i;
   }
   return arr;
+}
+
+function returnThis() {
+  return this;
 }
 
 module.exports = {
