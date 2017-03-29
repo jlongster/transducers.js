@@ -61,7 +61,6 @@ function ArrayIterator(arr) {
   this.index = 0;
 }
 
-
 ArrayIterator.prototype.next = function() {
   if(this.index < this.arr.length) {
     return {
