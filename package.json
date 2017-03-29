@@ -3,6 +3,12 @@
   "version": "0.3.2",
   "author": "James Long <longster@gmail.com>",
   "main": "./transducers.js",
+  "scripts": {
+    "test": "mocha ./tests/tests.js",
+    "build": "webpack",
+    "build:uglify": "NODE_ENV=production webpack",
+    "prepublish": "npm -s run build && npm test"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/jlongster/transducers.js.git"
