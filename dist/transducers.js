@@ -43,7 +43,7 @@ var transducers =
 /************************************************************************/
 /******/ ([
 /* 0 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	
 	// basic protocol helpers
@@ -82,8 +82,9 @@ var transducers =
 	    // Basic duck typing to accept an ill-formed iterator that doesn't
 	    // conform to the iterator protocol (all iterators should have the
 	    // @@iterator method and return themselves, but some engines don't
-	    // have that on generators like older v8)
-	    return coll;
+	    // have that on generators like older v8) and wrap it.
+	    
+	    return coll[protocols.iterator] ? coll : new WrappedIterator(coll);
 	  }
 	  else if(isArray(coll)) {
 	    return new ArrayIterator(coll);
@@ -93,10 +94,20 @@ var transducers =
 	  }
 	}
 
+	function WrappedIterator(iter) {
+	  this.wrapped = iter;
+	}
+
+	WrappedIterator.prototype.next = function() {
+	  return this.wrapped.next.apply(this.wrapped, arguments);
+	};
+	WrappedIterator.prototype[protocols.iterator] = returnThis;
+
 	function ArrayIterator(arr) {
 	  this.arr = arr;
 	  this.index = 0;
 	}
+
 
 	ArrayIterator.prototype.next = function() {
 	  if(this.index < this.arr.length) {
@@ -109,6 +120,7 @@ var transducers =
 	    done: true
 	  }
 	};
+	ArrayIterator.prototype[protocols.iterator] = returnThis;
 
 	function ObjectIterator(obj) {
 	  this.obj = obj;
@@ -128,6 +140,7 @@ var transducers =
 	    done: true
 	  }
 	};
+	ObjectIterator.prototype[protocols.iterator] = returnThis;
 
 	// helpers
 
@@ -189,7 +202,7 @@ var transducers =
 
 	function reduce(coll, xform, init) {
 	  if(isArray(coll)) {
-	    var result = init;
+	    var result = xform['@@transducer/init'](init);
 	    var index = -1;
 	    var len = coll.length;
 	    while(++index < len) {
@@ -202,7 +215,7 @@ var transducers =
 	    return xform['@@transducer/result'](result);
 	  }
 	  else if(isObject(coll) || fulfillsProtocol(coll, 'iterator')) {
-	    var result = init;
+	    var result = xform['@@transducer/init'](init);
 	    var iter = iterator(coll);
 	    var val = iter.next();
 	    while(!val.done) {
@@ -220,9 +233,7 @@ var transducers =
 
 	function transduce(coll, xform, reducer, init) {
 	  xform = xform(reducer);
-	  if(init === undefined) {
-	    init = xform['@@transducer/init']();
-	  }
+	  init = xform['@@transducer/init'](init);
 	  return reduce(coll, xform, init);
 	}
 
@@ -241,8 +252,11 @@ var transducers =
 
 	function transformer(f) {
 	  var t = {};
-	  t['@@transducer/init'] = function() {
-	    throw new Error('init value unavailable');
+	  t['@@transducer/init'] = function(init) {
+	    if(init == null) {
+	      throw new Error('init value unavailable');
+	    }
+	    return init;
 	  };
 	  t['@@transducer/result'] = function(v) {
 	    return v;
@@ -303,8 +317,8 @@ var transducers =
 	  this.f = f;
 	}
 
-	Map.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Map.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Map.prototype['@@transducer/result'] = function(v) {
@@ -336,8 +350,8 @@ var transducers =
 	  this.f = f;
 	}
 
-	Filter.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Filter.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Filter.prototype['@@transducer/result'] = function(v) {
@@ -382,8 +396,8 @@ var transducers =
 	  this.last = undefined;
 	}
 
-	Dedupe.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Dedupe.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Dedupe.prototype['@@transducer/result'] = function(v) {
@@ -413,8 +427,8 @@ var transducers =
 	  this.f = f;
 	}
 
-	TakeWhile.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	TakeWhile.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	TakeWhile.prototype['@@transducer/result'] = function(v) {
@@ -447,8 +461,8 @@ var transducers =
 	  this.xform = xform;
 	}
 
-	Take.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Take.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Take.prototype['@@transducer/result'] = function(v) {
@@ -486,8 +500,8 @@ var transducers =
 	  this.xform = xform;
 	}
 
-	Drop.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Drop.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Drop.prototype['@@transducer/result'] = function(v) {
@@ -519,8 +533,8 @@ var transducers =
 	  this.dropping = true;
 	}
 
-	DropWhile.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	DropWhile.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	DropWhile.prototype['@@transducer/result'] = function(v) {
@@ -559,8 +573,8 @@ var transducers =
 	  this.part = new Array(n);
 	}
 
-	Partition.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Partition.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Partition.prototype['@@transducer/result'] = function(v) {
@@ -607,8 +621,8 @@ var transducers =
 	  this.last = NOTHING;
 	}
 
-	PartitionBy.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	PartitionBy.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	PartitionBy.prototype['@@transducer/result'] = function(v) {
@@ -650,8 +664,8 @@ var transducers =
 	  this.started = false;
 	}
 
-	Interpose.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Interpose.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Interpose.prototype['@@transducer/result'] = function(v) {
@@ -692,8 +706,8 @@ var transducers =
 	  this.n = n;
 	}
 
-	Repeat.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Repeat.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Repeat.prototype['@@transducer/result'] = function(v) {
@@ -733,8 +747,8 @@ var transducers =
 	  this.i = -1;
 	}
 
-	TakeNth.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	TakeNth.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	TakeNth.prototype['@@transducer/result'] = function(v) {
@@ -763,14 +777,85 @@ var transducers =
 	  return seq(coll, takeNth(nth));
 	}
 
+	var sub = symbolExists ? Symbol('sub') : '@@transducer/sub';
+	function Zip(xform) {
+	  this.xform = xform
+	}
+
+	Zip.prototype['@@transducer/init'] = function(result) {
+	  var acc = {};
+	  acc[sub] = [];
+	  acc.wrapped = this.xform['@@transducer/init'](result);
+	  return acc;
+	};
+
+	Zip.prototype['@@transducer/result'] = function(result) {
+	  if(result[sub] == null || result[sub].length === 0) {
+	    return result.wrapped || result;  
+	  }
+	  var saved = result[sub];
+	  var i = -1;
+	  var xform = this.xform;
+	  var subxform = {};
+	  subxform['@@transducer/init'] = function(result) { 
+	    return result; 
+	  }
+	  subxform['@@transducer/result'] = function(v) {
+	    return v;
+	  };
+	  subxform['@@transducer/step'] = function(acc, input) {
+	    i += 1;
+	    return xform['@@transducer/step'](
+	      acc, saved.map(function (a) { return a[i]; }));
+	  };
+	  let wrappedResult = reduce(result[sub][0], subxform, result.wrapped);
+	  return xform['@@transducer/result'](wrappedResult);
+	};
+
+	Zip.prototype['@@transducer/step'] = function(result, input) {
+	  if(!isReduced(result)) {
+	    result[sub].push(input);
+	  }
+	  return result;
+	};
+
+	/**
+	 * Returns a new collection whose ith member consists of, 
+	 * for every element of the given collection, a collection of
+	 * the ith sub-elements of those elements.
+	 * Returns a transducer if a collection is not provided.
+	 */
+	function zip(coll) {
+	  if (arguments.length === 0) {
+	    return function(xform) {
+	      return new Zip(xform);
+	    };
+	  }
+	  return seq(coll, zip());
+	}
+
+
 	// pure transducers (cannot take collections)
+
+
 
 	function Cat(xform) {
 	  this.xform = xform;
+	  this.subxform = {};
+	  this.subxform['@@transducer/init'] = function(result) { 
+	    return result; 
+	  }
+	  this.subxform['@@transducer/result'] = function(v) {
+	    return v;
+	  };
+	  this.subxform['@@transducer/step'] = function(result, input) {
+	    var val = xform['@@transducer/step'](result, input);
+	    return isReduced(val) ? deref(val) : val;
+	  };
 	}
 
-	Cat.prototype['@@transducer/init'] = function() {
-	  return this.xform['@@transducer/init']();
+	Cat.prototype['@@transducer/init'] = function(result) {
+	  return this.xform['@@transducer/init'](result);
 	};
 
 	Cat.prototype['@@transducer/result'] = function(v) {
@@ -778,20 +863,7 @@ var transducers =
 	};
 
 	Cat.prototype['@@transducer/step'] = function(result, input) {
-	  var xform = this.xform;
-	  var newxform = {};
-	  newxform['@@transducer/init'] = function() {
-	    return xform['@@transducer/init']();
-	  };
-	  newxform['@@transducer/result'] = function(v) {
-	    return v;
-	  };
-	  newxform['@@transducer/step'] = function(result, input) {
-	    var val = xform['@@transducer/step'](result, input);
-	    return isReduced(val) ? deref(val) : val;
-	  };
-
-	  return reduce(input, newxform, result);
+	  return reduce(input, this.subxform, result);
 	};
 
 	function cat(xform) {
@@ -825,8 +897,28 @@ var transducers =
 	}
 
 	var arrayReducer = {};
-	arrayReducer['@@transducer/init'] = function() {
-	  return [];
+	arrayReducer['@@transducer/init'] = function(result) {
+	  if(result == null) {
+	    return [];
+	  }
+	  else if(isArray(result)) {
+	    return result;
+	  }
+	  else {
+	    if(typeof Array.from === 'function') {
+	      return Array.from(result);
+	    }
+	    else {
+	      var itr = iterator(result);
+	      var val = itr.next()
+	      var arrayResult = [];
+	      while(!val.done) {
+	        arrayResult.push(val.value);
+	        val = itr.next();
+	      }
+	      return arrayResult;
+	    }
+	  }
 	};
 	arrayReducer['@@transducer/result'] = function(v) {
 	  return v;
@@ -834,8 +926,29 @@ var transducers =
 	arrayReducer['@@transducer/step'] = push;
 
 	var objReducer = {};
-	objReducer['@@transducer/init'] = function() {
-	  return {};
+	objReducer['@@transducer/init'] = function(result) {
+	  if(result == null) {
+	    return {};
+	  }
+	  else if(isObject(result)) {
+	    return result;
+	  }
+	  else {
+	    var itr = iterator(result);
+	    var val = itr.next();
+	    var objResult = {};
+	    while(!val.done) {
+	      const value = val.value;
+	      if(Array.isArray(value)) {
+	        objResult[value[0]] = value[1];
+	      }
+	      else {
+	        objResult[value] = true;
+	      }
+	      val = itr.next();
+	    }
+	    return objResult;
+	  }
 	};
 	objReducer['@@transducer/result'] = function(v) {
 	  return v;
@@ -880,7 +993,6 @@ var transducers =
 	    else {
 	      init = new coll.constructor();
 	    }
-
 	    return transduce(coll, xform, coll, init);
 	  }
 	  else if(fulfillsProtocol(coll, 'iterator')) {
@@ -942,9 +1054,7 @@ var transducers =
 	  this.stepper = new Stepper(xform, iterator(coll));
 	}
 
-	LazyTransformer.prototype[protocols.iterator] = function() {
-	  return this;
-	}
+	LazyTransformer.prototype[protocols.iterator] = returnThis;
 
 	LazyTransformer.prototype.next = function() {
 	  this['@@transducer/step']();
@@ -976,6 +1086,10 @@ var transducers =
 	  return arr;
 	}
 
+	function returnThis() {
+	  return this;
+	}
+
 	module.exports = {
 	  reduce: reduce,
 	  transformer: transformer,
@@ -1001,6 +1115,7 @@ var transducers =
 	  take: take,
 	  takeWhile: takeWhile,
 	  takeNth: takeNth,
+	  zip: zip,
 	  drop: drop,
 	  dropWhile: dropWhile,
 	  partition: partition,
@@ -1013,5 +1128,5 @@ var transducers =
 	};
 
 
-/***/ }
+/***/ })
 /******/ ]);

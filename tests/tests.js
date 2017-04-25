@@ -5,7 +5,7 @@ var { reduce, transformer, toArray, toObj, toIter, iterator, push, merge, empty,
       transduce, seq, into, compose, map, filter, remove,
       cat, mapcat, keep, dedupe, take, takeWhile,
       drop, dropWhile, partition, partitionBy,
-      interpose, repeat, takeNth } = t;
+      interpose, repeat, takeNth, zip } = t;
 
 var context = { num: 5 };
 
@@ -461,4 +461,9 @@ describe('', () => {
     expect(toArray(numsIter), [1, 2, 3]);
     expect(toArray(brokenIter), [1, 2, 3]);
   });
+
+  it('zip should work', function() {
+    var toZip = [[1, 2, 3], [4, 5, 6]];
+    expect(zip(toZip)).to.eql([[1, 4], [2, 5], [3, 6]]);
+  })
 });
