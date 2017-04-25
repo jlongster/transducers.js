@@ -1,14 +1,15 @@
 var expect = require('expect.js');
 var Immutable = require('immutable');
 var t = require('../transducers');
-var { reduce, transformer, toArray, toObj, toIter, iterate, push, merge, empty,
+var { reduce, transformer, toArray, toObj, toIter, iterator, push, merge, empty,
       transduce, seq, into, compose, map, filter, remove,
       cat, mapcat, keep, dedupe, take, takeWhile,
       drop, dropWhile, partition, partitionBy,
-      interpose, repeat, takeNth } = t;
+      interpose, repeat, takeNth, zip } = t;
 
 var context = { num: 5 };
 
+var iterProtocol = Symbol && typeof Symbol.iterator !== 'undefined' ? Symbol.iterator : '@@iterator';
 // utility
 
 function first(x) {
@@ -413,7 +414,7 @@ describe('', () => {
         { foo: 2, bar: 3 });
   });
 
-  it('iter should work', function() {
+  it('toIter should work', function() {
     var nums = {
       i: 0,
       next: function() {
@@ -425,8 +426,44 @@ describe('', () => {
     };
 
     var lt = toIter(nums, map(x => x * 2));
+
+    expect(lt[iterProtocol]()).to.equal(lt);
     expect(lt instanceof t.LazyTransformer).to.be.ok();
     expect(toArray(lt, take(5)),
            [0, 2, 4, 6, 8]);
+
+    var iter = toIter(nums);
+    expect(iter[iterProtocol]()).to.equal(iter);
+    expect(toArray(iter, take(5)), 
+      [0, 1, 2, 3, 4]);
   });
+
+  it('iterator should work', function() {
+    var obj = {a: 1, b: 2, c: 3};
+    var nums = [1, 2, 3];
+    var broken = {
+      i: 1,
+      next: function() {
+        return {
+          value: this.i++,
+          done: this.i <= 3
+        }
+      }
+    };
+
+    var [objIter, numsIter, brokenIter] = [obj, nums, broken].map(iterator);
+
+    expect(objIter[iterProtocol](), objIter);
+    expect(numsIter[iterProtocol](), numsIter);
+    expect(brokenIter[iterProtocol](), brokenIter);
+
+    expect(toObj(objIter), {a: 1, b: 2, c: 3});
+    expect(toArray(numsIter), [1, 2, 3]);
+    expect(toArray(brokenIter), [1, 2, 3]);
+  });
+
+  it('zip should work', function() {
+    var toZip = [[1, 2, 3], [4, 5, 6]];
+    expect(zip(toZip)).to.eql([[1, 4], [2, 5], [3, 6]]);
+  })
 });
