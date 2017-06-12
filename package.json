@@ -17,7 +17,7 @@
     "benchmark": "^1.0.0",
     "es6-macros": "0.0.7",
     "expect.js": "^0.3.1",
-    "gulp": "^3.8.8",
+    "gulp": "^3.9.1",
     "gulp-header": "^1.1.1",
     "gulp-sourcemaps": "^1.1.5",
     "gulp-sweetjs": "^0.5.4",
